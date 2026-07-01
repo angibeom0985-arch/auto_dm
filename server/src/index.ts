@@ -60,6 +60,7 @@ function authenticateToken(req: Request, res: Response, next: NextFunction) {
 }
 
 app.use(cors());
+app.use(express.urlencoded({ extended: true }));
 
 // Configure express.json to store raw body for signature verification
 app.use(
@@ -868,17 +869,21 @@ app.get("/api/auth/facebook", (req: Request, res: Response) => {
           background: #0f172a;
           color: #f1f5f9;
           font-family: system-ui, sans-serif;
-          display: grid;
-          place-items: center;
-          height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 100vh;
           margin: 0;
+          padding: 20px;
+          box-sizing: border-box;
         }
         .card {
           background: #1e293b;
           padding: 30px;
           border-radius: 16px;
           border: 1px solid rgba(255,255,255,0.08);
-          max-width: 420px;
+          width: 100%;
+          max-width: 440px;
           text-align: center;
           box-shadow: 0 10px 25px rgba(0,0,0,0.3);
         }
@@ -888,16 +893,16 @@ app.get("/api/auth/facebook", (req: Request, res: Response) => {
           color: #1877f2;
           margin-bottom: 15px;
         }
-        h2 { margin: 0 0 10px; font-size: 20px; }
-        p { color: #94a3b8; font-size: 13px; line-height: 1.5; margin: 0 0 25px; }
+        h2 { margin: 0 0 10px; font-size: 18px; }
+        p { color: #94a3b8; font-size: 12px; line-height: 1.5; margin: 0 0 20px; }
         .scope-item {
           background: rgba(255,255,255,0.02);
           border: 1px solid rgba(255,255,255,0.05);
           border-radius: 8px;
-          padding: 10px;
-          margin-bottom: 8px;
+          padding: 8px;
+          margin-bottom: 6px;
           text-align: left;
-          font-size: 12px;
+          font-size: 11px;
         }
         .btn-connect {
           display: block;
@@ -908,11 +913,36 @@ app.get("/api/auth/facebook", (req: Request, res: Response) => {
           text-decoration: none;
           font-weight: 700;
           border-radius: 8px;
-          margin-top: 20px;
+          margin-top: 15px;
           border: none;
           cursor: pointer;
+          font-size: 13px;
         }
         .btn-connect:hover { background: #166fe5; }
+        .form-control {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          text-align: left;
+          margin-bottom: 12px;
+        }
+        .form-control label {
+          font-size: 11px;
+          color: #94a3b8;
+          font-weight: 600;
+        }
+        .form-control input, .form-control textarea {
+          padding: 10px;
+          background: #0f172a;
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 6px;
+          color: white;
+          font-size: 13px;
+        }
+        .form-control textarea {
+          font-family: monospace;
+          resize: none;
+        }
       </style>
     </head>
     <body>
@@ -923,11 +953,34 @@ app.get("/api/auth/facebook", (req: Request, res: Response) => {
         
         <div class="scope-item">🔑 <strong>instagram_business_manage_messages</strong><br>Direct Message 읽기/쓰기 권한</div>
         <div class="scope-item">💬 <strong>instagram_business_manage_comments</strong><br>릴스 및 피드 댓글 관리 권한</div>
-        <div class="scope-item">📄 <strong>pages_show_list / pages_read_engagement</strong><br>연결된 페이스북 페이지 정보 조회</div>
         
         <button class="btn-connect" onclick="location.href='${redirectUri}?code=mock_oauth_code_xyz987'">
-          연동 완료 및 권한 동의
+          연동 완료 및 권한 동의 (모의 테스트)
         </button>
+
+        <div style="border-top: 1px solid rgba(255,255,255,0.08); margin: 25px 0 20px;"></div>
+
+        <h2>실제 인스타그램 계정 연동 (수동)</h2>
+        <p>Meta 앱 검수 제약이나 도메인 제한 없이 실제 계정의 Access Token을 기입하여 실연동을 즉시 끝마칩니다.</p>
+
+        <form action="/api/auth/facebook/manual" method="POST">
+          <input type="hidden" name="token" value="${token || ''}">
+          <div class="form-control">
+            <label>인스타그램 사용자명 (Username)</label>
+            <input type="text" name="username" placeholder="예: davey_marketing" required>
+          </div>
+          <div class="form-control">
+            <label>Instagram ID (숫자 식별자)</label>
+            <input type="text" name="instagramId" placeholder="예: 17841400000000000" required>
+          </div>
+          <div class="form-control">
+            <label>Meta 액세스 토큰 (Access Token)</label>
+            <textarea name="accessToken" rows="3" placeholder="EAAG..." required></textarea>
+          </div>
+          <button type="submit" class="btn-connect" style="background: #10b981; color: #0f172a;">
+            실제 계정 연동 완료
+          </button>
+        </form>
       </div>
     </body>
     </html>
@@ -994,6 +1047,70 @@ app.get("/api/auth/facebook/callback", async (req: Request, res: Response) => {
     res.send(htmlResponse);
   } catch {
     res.status(500).send("Failed to save credentials during callback");
+  }
+});
+
+app.post("/api/auth/facebook/manual", async (req: Request, res: Response) => {
+  const { token, username, instagramId, accessToken } = req.body;
+  if (!username || !instagramId || !accessToken) {
+    res.status(400).send("Missing required fields");
+    return;
+  }
+
+  const decoded = token ? verifyToken(token as string) : null;
+  const userId = decoded ? decoded.userId : null;
+
+  try {
+    const expires = new Date();
+    expires.setDate(expires.getDate() + 9999); // 30년 가량 넉넉한 만료기간 부여
+
+    const cleanUsername = username.replace("@", "").trim();
+
+    const account = await prisma.account.upsert({
+      where: { instagramId: instagramId.trim() },
+      update: {
+        username: cleanUsername,
+        accessToken: accessToken.trim(),
+        tokenExpires: expires,
+        userId,
+      },
+      create: {
+        instagramId: instagramId.trim(),
+        username: cleanUsername,
+        accessToken: accessToken.trim(),
+        tokenExpires: expires,
+        userId,
+      },
+    });
+
+    await prisma.eventLog.create({
+      data: {
+        time: `${String(new Date().getHours()).padStart(2, "0")}:${String(new Date().getMinutes()).padStart(2, "0")}`,
+        type: "Meta 연결",
+        text: `Instagram Professional 실제 계정 '@${cleanUsername}' 연동 완료 (수동 토큰)`,
+        status: "success",
+        userId,
+        eventId: `meta-connect-manual-${Date.now()}`,
+      },
+    });
+
+    const htmlResponse = `
+      <!DOCTYPE html>
+      <html>
+      <body>
+        <script>
+          if (window.opener) {
+            window.opener.postMessage({ type: 'META_AUTH_SUCCESS', account: ${JSON.stringify(account)} }, '*');
+          }
+          window.close();
+        </script>
+        <p>실제 계정 인증 완료! 이 창은 곧 닫힙니다...</p>
+      </body>
+      </html>
+    `;
+    res.send(htmlResponse);
+  } catch {
+    res.status(500).send("Failed to save manual credentials");
   }
 });
 
