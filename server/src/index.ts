@@ -916,8 +916,9 @@ app.post("/api/auth/deauthorize", async (req: Request, res: Response) => {
     });
 
     // Respond with official Meta deletion status check spec
+    const APP_URL = process.env.APP_URL || "https://instagram.gowith153.com";
     res.json({
-      url: `http://localhost:5000/api/auth/deletion/status?id=del_${Date.now()}`,
+      url: `${APP_URL}/api/auth/deletion/status?id=del_${Date.now()}`,
       confirmation_code: `mock_del_conf_${Date.now()}`,
     });
   } catch {

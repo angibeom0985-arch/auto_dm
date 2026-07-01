@@ -129,7 +129,7 @@ function App() {
   const [metaLoading, setMetaLoading] = useState<boolean>(false);
   const [metaAccount, setMetaAccount] = useState<MetaAccount | null>(null);
 
-  const [webhookUrl, setWebhookUrl] = useState<string>("https://api.dmlaunch.io/webhook/v1/instagram");
+  const [webhookUrl, setWebhookUrl] = useState<string>("https://instagram.gowith153.com/webhook/instagram");
   const [webhookToken, setWebhookToken] = useState<string>("dml_secret_verify_token_12345");
   const [webhookVerified, setWebhookVerified] = useState<boolean>(true);
 
