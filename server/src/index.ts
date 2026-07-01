@@ -88,7 +88,7 @@ app.post("/api/auth/register", async (req: Request, res: Response) => {
 
     // Set first registered user as ADMIN for ease of demo, others as USER
     const userCount = await prisma.user.count();
-    const role = userCount === 0 || email === "admin@gowith153.com" ? "ADMIN" : "USER";
+    const role = userCount === 0 || email === "davey@gowith153.com" ? "ADMIN" : "USER";
 
     const passwordHash = hashPassword(password);
     const newUser = await prisma.user.create({
@@ -284,13 +284,13 @@ async function seedInitialData() {
   try {
     // Seed default admin user
     let adminUser = await prisma.user.findUnique({
-      where: { email: "admin@gowith153.com" }
+      where: { email: "davey@gowith153.com" }
     });
     if (!adminUser) {
       adminUser = await prisma.user.create({
         data: {
-          email: "admin@gowith153.com",
-          passwordHash: hashPassword("admin153!"),
+          email: "davey@gowith153.com",
+          passwordHash: hashPassword("7890uiop!"),
           name: "데이비",
           role: "ADMIN",
         }
