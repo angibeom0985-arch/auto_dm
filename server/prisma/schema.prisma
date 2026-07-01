@@ -1,0 +1,74 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Account {
+  id           String    @id @default(uuid())
+  instagramId  String    @unique
+  username     String
+  accessToken  String
+  tokenExpires DateTime?
+  dailyLimit      Int       @default(150)
+  notificationUrl String?
+  connectedAt     DateTime  @default(now())
+}
+
+model Automation {
+  id          String   @id @default(uuid())
+  name        String
+  triggerType String   // "comment" | "dm"
+  trigger     String   // comma-separated keywords
+  message     String
+  status      String   // "운영중" | "예약" | "점검"
+  targetPostId String?
+  sent        Int      @default(0)
+  conversion  String   @default("0.0%")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Lead {
+  id            String   @id @default(uuid())
+  username      String   @unique
+  lastActive    String   // e.g. "방금 전", "5분 전" 또는 날짜 시간 문자열
+  messagesCount Int      @default(0)
+  status        String   // "대기" | "상담중" | "전환완료"
+  source        String   // "댓글" | "DM"
+  lastMessage   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model EventLog {
+  id        String   @id @default(uuid())
+  eventId   String?  @unique
+  time      String   // "HH:MM" format
+  type      String   // e.g. "댓글 매칭", "DM 수신"
+  text      String
+  status    String   // "success" | "warning" | "info" | "error"
+  createdAt DateTime @default(now())
+}
+
+model Template {
+  id        String   @id @default(uuid())
+  name      String
+  content   String
+  type      String
+  createdAt DateTime @default(now())
+}
+
+model QueueItem {
+  id           String   @id @default(uuid())
+  recipientId  String
+  automationId String
+  body         String
+  status       String   // "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED"
+  retryCount   Int      @default(0)
+  errorLog     String?
+  createdAt    DateTime @default(now())
+}
