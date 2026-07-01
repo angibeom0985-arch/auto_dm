@@ -1,74 +1,104 @@
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
+  url      = "file:./dev.db"
 }
 
 generator client {
   provider = "prisma-client-js"
 }
 
+model User {
+  id           String       @id @default(uuid())
+  email        String       @unique
+  passwordHash String
+  name         String
+  role         String       @default("USER") // USER | ADMIN
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  automations  Automation[]
+  accounts     Account[]
+  leads        Lead[]
+  eventLogs    EventLog[]
+  templates    Template[]
+  queueItems   QueueItem[]
+}
+
 model Account {
-  id           String    @id @default(uuid())
-  instagramId  String    @unique
-  username     String
-  accessToken  String
-  tokenExpires DateTime?
+  id              String    @id @default(uuid())
+  instagramId     String    @unique
+  username        String
+  accessToken     String
+  tokenExpires    DateTime?
   dailyLimit      Int       @default(150)
   notificationUrl String?
   connectedAt     DateTime  @default(now())
+  userId          String?
+  user            User?     @relation(fields: [userId], references: [id])
 }
 
 model Automation {
-  id          String   @id @default(uuid())
-  name        String
-  triggerType String   // "comment" | "dm"
-  trigger     String   // comma-separated keywords
-  message     String
-  status      String   // "운영중" | "예약" | "점검"
+  id           String      @id @default(uuid())
+  name         String
+  triggerType  String      // "comment" | "dm"
+  trigger      String
+  message      String
+  status       String      @default("운영중") // "운영중" | "점검"
   targetPostId String?
-  sent        Int      @default(0)
-  conversion  String   @default("0.0%")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  sent         Int         @default(0)
+  conversion   String      @default("0%")
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  userId       String?
+  user         User?       @relation(fields: [userId], references: [id])
+  queueItems   QueueItem[]
 }
 
 model Lead {
   id            String   @id @default(uuid())
   username      String   @unique
-  lastActive    String   // e.g. "방금 전", "5분 전" 또는 날짜 시간 문자열
-  messagesCount Int      @default(0)
-  status        String   // "대기" | "상담중" | "전환완료"
+  lastActive    String
+  messagesCount Int      @default(1)
+  status        String   @default("대기") // "대기" | "상담중" | "전환완료"
   source        String   // "댓글" | "DM"
   lastMessage   String
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  userId        String?
+  user          User?    @relation(fields: [userId], references: [id])
 }
 
 model EventLog {
   id        String   @id @default(uuid())
-  eventId   String?  @unique
-  time      String   // "HH:MM" format
-  type      String   // e.g. "댓글 매칭", "DM 수신"
+  time      String
+  type      String
   text      String
   status    String   // "success" | "warning" | "info" | "error"
+  eventId   String   @unique
   createdAt DateTime @default(now())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
 }
 
 model Template {
   id        String   @id @default(uuid())
   name      String
   content   String
-  type      String
+  type      String   @default("일반 안내")
   createdAt DateTime @default(now())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
 }
 
 model QueueItem {
-  id           String   @id @default(uuid())
+  id           String      @id @default(uuid())
   recipientId  String
   automationId String
   body         String
-  status       String   // "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED"
-  retryCount   Int      @default(0)
+  status       String      @default("PENDING") // "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED"
+  retryCount   Int         @default(0)
   errorLog     String?
-  createdAt    DateTime @default(now())
+  createdAt    DateTime    @default(now())
+  userId       String?
+  user         User?       @relation(fields: [userId], references: [id])
+  automation   Automation  @relation(fields: [automationId], references: [id], onDelete: Cascade)
 }

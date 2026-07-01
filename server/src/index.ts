@@ -12,9 +12,51 @@ const prisma = new PrismaClient();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Custom interface for Request with rawBody
-interface AuthenticatedRequest extends Request {
+// Custom interface for Request with rawBody and Authenticated user
+interface AuthRequest extends Request {
   rawBody?: Buffer;
+  user?: { userId: string; email: string; role: string };
+}
+
+function hashPassword(password: string): string {
+  return crypto.createHmac("sha256", "dml_secret_salt_999").update(password).digest("hex");
+}
+
+function generateToken(userId: string, email: string, role: string): string {
+  const payload = JSON.stringify({ userId, email, role, exp: Date.now() + 7 * 24 * 60 * 60 * 1000 });
+  const signature = crypto.createHmac("sha256", "dml_token_secret").update(payload).digest("hex");
+  return Buffer.from(payload).toString("base64") + "." + signature;
+}
+
+function verifyToken(token: string): { userId: string; email: string; role: string } | null {
+  try {
+    const [base64Payload, signature] = token.split(".");
+    if (!base64Payload || !signature) return null;
+    const payloadStr = Buffer.from(base64Payload, "base64").toString("utf8");
+    const expectedSignature = crypto.createHmac("sha256", "dml_token_secret").update(payloadStr).digest("hex");
+    if (signature !== expectedSignature) return null;
+    const payload = JSON.parse(payloadStr);
+    if (Date.now() > payload.exp) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+function authenticateToken(req: Request, res: Response, next: NextFunction) {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+  if (!token) {
+    res.status(401).json({ error: "Access token is missing" });
+    return;
+  }
+  const decoded = verifyToken(token);
+  if (!decoded) {
+    res.status(403).json({ error: "Access token is invalid or expired" });
+    return;
+  }
+  (req as AuthRequest).user = decoded;
+  next();
 }
 
 app.use(cors());
@@ -22,11 +64,170 @@ app.use(cors());
 // Configure express.json to store raw body for signature verification
 app.use(
   express.json({
-    verify: (req: AuthenticatedRequest, res: Response, buf: Buffer) => {
+    verify: (req: AuthRequest, res: Response, buf: Buffer) => {
       req.rawBody = buf;
     },
   })
 );
+
+// ==========================================
+// Auth & Admin Routes (고도화 5단계)
+// ==========================================
+app.post("/api/auth/register", async (req: Request, res: Response) => {
+  const { email, password, name } = req.body;
+  if (!email || !password || !name) {
+    res.status(400).json({ error: "Email, password, and name are required." });
+    return;
+  }
+  try {
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      res.status(400).json({ error: "Email already registered." });
+      return;
+    }
+
+    // Set first registered user as ADMIN for ease of demo, others as USER
+    const userCount = await prisma.user.count();
+    const role = userCount === 0 || email === "admin@gowith153.com" ? "ADMIN" : "USER";
+
+    const passwordHash = hashPassword(password);
+    const newUser = await prisma.user.create({
+      data: {
+        email,
+        passwordHash,
+        name,
+        role,
+      },
+    });
+
+    const token = generateToken(newUser.id, newUser.email, newUser.role);
+    res.status(201).json({
+      success: true,
+      token,
+      user: { id: newUser.id, email: newUser.email, name: newUser.name, role: newUser.role },
+    });
+  } catch {
+    res.status(500).json({ error: "Failed to register user." });
+  }
+});
+
+app.post("/api/auth/login", async (req: Request, res: Response) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    res.status(400).json({ error: "Email and password are required." });
+    return;
+  }
+  try {
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      res.status(401).json({ error: "Invalid email or password." });
+      return;
+    }
+
+    const checkHash = hashPassword(password);
+    if (user.passwordHash !== checkHash) {
+      res.status(401).json({ error: "Invalid email or password." });
+      return;
+    }
+
+    const token = generateToken(user.id, user.email, user.role);
+    res.json({
+      success: true,
+      token,
+      user: { id: user.id, email: user.email, name: user.name, role: user.role },
+    });
+  } catch {
+    res.status(500).json({ error: "Failed to login." });
+  }
+});
+
+app.get("/api/auth/me", authenticateToken, async (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  if (!authReq.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: authReq.user.userId },
+    });
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+    res.json({ id: user.id, email: user.email, name: user.name, role: user.role });
+  } catch {
+    res.status(500).json({ error: "Failed to fetch user session" });
+  }
+});
+
+// Admin: Get all registered SaaS customers and statistics
+app.get("/api/admin/users", authenticateToken, async (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  if (!authReq.user || authReq.user.role !== "ADMIN") {
+    res.status(403).json({ error: "Access denied. Admins only." });
+    return;
+  }
+  try {
+    const users = await prisma.user.findMany({
+      orderBy: { createdAt: "desc" },
+      include: {
+        automations: true,
+        accounts: true,
+        leads: true,
+      },
+    });
+
+    const userStats = users.map((u) => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      createdAt: u.createdAt,
+      flowsCount: u.automations.length,
+      connectedAccount: u.accounts[0]?.username || "연동 없음",
+      leadsCount: u.leads.length,
+    }));
+
+    res.json(userStats);
+  } catch {
+    res.status(500).json({ error: "Failed to fetch admin users statistics" });
+  }
+});
+
+// Admin: Get all error system logs globally
+app.get("/api/admin/system-logs", authenticateToken, async (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  if (!authReq.user || authReq.user.role !== "ADMIN") {
+    res.status(403).json({ error: "Access denied. Admins only." });
+    return;
+  }
+  try {
+    const errorQueues = await prisma.queueItem.findMany({
+      where: {
+        status: "FAILED",
+      },
+      orderBy: { createdAt: "desc" },
+      include: {
+        user: true,
+      },
+    });
+
+    const formattedLogs = errorQueues.map((q) => ({
+      id: q.id,
+      userEmail: q.user?.email || "시스템 공용",
+      userName: q.user?.name || "알수없음",
+      recipientId: q.recipientId,
+      errorLog: q.errorLog || "원인 미상 에러",
+      createdAt: q.createdAt,
+      body: q.body,
+    }));
+
+    res.json(formattedLogs);
+  } catch {
+    res.status(500).json({ error: "Failed to fetch global system errors" });
+  }
+});
 
 // Helper to get HH:MM formatted time
 function getCurrentTime(): string {
@@ -81,6 +282,22 @@ const verifyMetaSignature = (
 // ==========================================
 async function seedInitialData() {
   try {
+    // Seed default admin user
+    let adminUser = await prisma.user.findUnique({
+      where: { email: "admin@gowith153.com" }
+    });
+    if (!adminUser) {
+      adminUser = await prisma.user.create({
+        data: {
+          email: "admin@gowith153.com",
+          passwordHash: hashPassword("admin153!"),
+          name: "데이비",
+          role: "ADMIN",
+        }
+      });
+      console.log("🌱 Default ADMIN user seeded.");
+    }
+
     const autoCount = await prisma.automation.count();
     if (autoCount === 0) {
       await prisma.automation.createMany({
@@ -93,6 +310,7 @@ async function seedInitialData() {
             status: "운영중",
             sent: 1248,
             conversion: "31.4%",
+            userId: adminUser.id,
           },
           {
             name: "스토리 답장 상담 연결",
@@ -102,6 +320,7 @@ async function seedInitialData() {
             status: "예약",
             sent: 382,
             conversion: "18.9%",
+            userId: adminUser.id,
           },
           {
             name: "신규 DM 가격 문의",
@@ -111,11 +330,15 @@ async function seedInitialData() {
             status: "점검",
             sent: 96,
             conversion: "22.1%",
+            userId: adminUser.id,
           },
         ],
       });
       console.log("🌱 Default Automations seeded.");
     }
+
+    const adminUser = await prisma.user.findFirst({ where: { email: "admin@gowith153.com" } });
+    const adminUserId = adminUser ? adminUser.id : null;
 
     const leadCount = await prisma.lead.count();
     if (leadCount === 0) {
@@ -128,6 +351,7 @@ async function seedInitialData() {
             status: "전환완료",
             source: "댓글",
             lastMessage: "감사합니다! 바로 읽어볼게요.",
+            userId: adminUserId,
           },
           {
             username: "saleon.kr",
@@ -136,6 +360,7 @@ async function seedInitialData() {
             status: "상담중",
             source: "DM",
             lastMessage: "가격표 플로우 시작됨",
+            userId: adminUserId,
           },
           {
             username: "beauty_growth",
@@ -144,6 +369,7 @@ async function seedInitialData() {
             status: "대기",
             source: "댓글",
             lastMessage: "가이드 신청합니다.",
+            userId: adminUserId,
           },
         ],
       });
@@ -160,10 +386,10 @@ async function seedInitialData() {
 
       await prisma.eventLog.createMany({
         data: [
-          { time: getFormattedTime(10), type: "댓글 감지", text: "@studio_min 님에게 가이드 메시지 발송 완료", status: "success", eventId: "seed-evt-1" },
-          { time: getFormattedTime(15), type: "DM 수신", text: "@saleon.kr 문의에 가격표 플로우 시작", status: "info", eventId: "seed-evt-2" },
-          { time: getFormattedTime(23), type: "예약 발송", text: "2단계 후속 메시지 18건 대기열 등록", status: "info", eventId: "seed-evt-3" },
-          { time: getFormattedTime(40), type: "권한 점검", text: "Meta 토큰 만료 14일 전 알림 생성", status: "warning", eventId: "seed-evt-4" },
+          { time: getFormattedTime(10), type: "댓글 감지", text: "@studio_min 님에게 가이드 메시지 발송 완료", status: "success", eventId: "seed-evt-1", userId: adminUserId },
+          { time: getFormattedTime(15), type: "DM 수신", text: "@saleon.kr 문의에 가격표 플로우 시작", status: "info", eventId: "seed-evt-2", userId: adminUserId },
+          { time: getFormattedTime(23), type: "예약 발송", text: "2단계 후속 메시지 18건 대기열 등록", status: "info", eventId: "seed-evt-3", userId: adminUserId },
+          { time: getFormattedTime(40), type: "권한 점검", text: "Meta 토큰 만료 14일 전 알림 생성", status: "warning", eventId: "seed-evt-4", userId: adminUserId },
         ],
       });
       console.log("🌱 Default EventLogs seeded.");
@@ -173,9 +399,9 @@ async function seedInitialData() {
     if (templateCount === 0) {
       await prisma.template.createMany({
         data: [
-          { name: "무료 가이드북 배포", content: "요청하신 [가이드북 이름]을 DM으로 발송해 드립니다! 다운로드 링크: [링크]", type: "자료 배포" },
-          { name: "상담 예약 링크", content: "1:1 상담 예약이 필요하신가요? 아래 캘린더 링크에서 가능한 시간을 선택해주세요: [캘린더링크]", type: "고객 상담" },
-          { name: "요금제 및 단가 안내", content: "저희 서비스 요금제를 안내해 드립니다. 베이직 플랜: 월 2.9만원 / 프로 플랜: 월 5.9만원. 링크: [링크]", type: "가격 문의" },
+          { name: "무료 가이드북 배포", content: "요청하신 [가이드북 이름]을 DM으로 발송해 드립니다! 다운로드 링크: [링크]", type: "자료 배포", userId: adminUserId },
+          { name: "상담 예약 링크", content: "1:1 상담 예약이 필요하신가요? 아래 캘린더 링크에서 가능한 시간을 선택해주세요: [캘린더링크]", type: "고객 상담", userId: adminUserId },
+          { name: "요금제 및 단가 안내", content: "저희 서비스 요금제를 안내해 드립니다. 베이직 플랜: 월 2.9만원 / 프로 플랜: 월 5.9만원. 링크: [링크]", type: "가격 문의", userId: adminUserId },
         ],
       });
       console.log("🌱 Default Templates seeded.");
@@ -221,6 +447,10 @@ app.post("/webhook/instagram", verifyMetaSignature, async (req: Request, res: Re
   const entries = body.entry || [];
   let eventsProcessed = 0;
 
+  // Resolve matching userId from Meta account context (Multi-tenancy)
+  const metaAccount = await prisma.account.findFirst();
+  const userId = metaAccount ? metaAccount.userId : null;
+
   try {
     for (const entry of entries) {
       // 1. Process DM events (entry.messaging)
@@ -250,11 +480,12 @@ app.post("/webhook/instagram", verifyMetaSignature, async (req: Request, res: Re
               type: "DM 수신",
               text: `유저 ID [${senderId}] 로부터 DM 수신: "${text}"`,
               status: "info",
+              userId,
             },
           });
 
           // Evaluate Match with active automations in Trigger Engine
-          const matchResult = await evaluateTrigger(text, "dm");
+          const matchResult = await evaluateTrigger(text, "dm", undefined, userId || undefined);
 
           if (matchResult.matched && matchResult.automation) {
             // Render template variables
@@ -263,8 +494,8 @@ app.post("/webhook/instagram", verifyMetaSignature, async (req: Request, res: Re
               trigger: matchResult.matchedKeyword,
             });
 
-            // Enqueue message for sending (5단계)
-            await enqueueMessage(senderId, matchResult.automation.id, renderedMsg);
+            // Enqueue message for sending
+            await enqueueMessage(senderId, matchResult.automation.id, renderedMsg, userId || undefined);
 
             // Update stats
             await prisma.automation.update({
@@ -280,6 +511,7 @@ app.post("/webhook/instagram", verifyMetaSignature, async (req: Request, res: Re
                 type: "대기열 추가",
                 text: `[${senderId}] 님에게 보낼 자동 DM 대기열 등록 완료 (규칙: ${matchResult.automation.name})`,
                 status: "success",
+                userId,
               },
             });
           }
@@ -316,12 +548,13 @@ app.post("/webhook/instagram", verifyMetaSignature, async (req: Request, res: Re
                 type: "댓글 감지",
                 text: `@${username} 님의 댓글: "${text}"`,
                 status: "info",
+                userId,
               },
             });
 
             const mediaId = changeObj.value?.media?.id || changeObj.value?.media_id;
             // Evaluate Match with active automations in Trigger Engine
-            const matchResult = await evaluateTrigger(text, "comment", mediaId);
+            const matchResult = await evaluateTrigger(text, "comment", mediaId, userId || undefined);
 
             if (matchResult.matched && matchResult.automation) {
               // Render template variables
@@ -330,8 +563,8 @@ app.post("/webhook/instagram", verifyMetaSignature, async (req: Request, res: Re
                 trigger: matchResult.matchedKeyword,
               });
 
-              // Enqueue message for sending (5단계)
-              await enqueueMessage(username, matchResult.automation.id, renderedMsg);
+              // Enqueue message for sending
+              await enqueueMessage(username, matchResult.automation.id, renderedMsg, userId || undefined);
 
               // Update stats
               await prisma.automation.update({
@@ -347,17 +580,18 @@ app.post("/webhook/instagram", verifyMetaSignature, async (req: Request, res: Re
                   type: "대기열 추가",
                   text: `@${username} 님에게 보낼 Private Reply 대기열 등록 완료 (규칙: ${matchResult.automation.name})`,
                   status: "success",
+                  userId,
                 },
               });
 
               // Sync Lead
-              const existingLead = await prisma.lead.findUnique({
-                where: { username },
+              const existingLead = await prisma.lead.findFirst({
+                where: { username, userId },
               });
 
               if (existingLead) {
                 await prisma.lead.update({
-                  where: { username },
+                  where: { id: existingLead.id },
                   data: {
                     lastActive: "방금 전",
                     messagesCount: { increment: 1 },
@@ -373,6 +607,7 @@ app.post("/webhook/instagram", verifyMetaSignature, async (req: Request, res: Re
                     status: "대기",
                     source: "댓글",
                     lastMessage: text,
+                    userId,
                   },
                 });
               }
@@ -395,9 +630,11 @@ app.post("/webhook/instagram", verifyMetaSignature, async (req: Request, res: Re
 // ==========================================
 
 // 1. Automations CRUD
-app.get("/api/automations", async (req: Request, res: Response) => {
+app.get("/api/automations", authenticateToken, async (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
   try {
     const automations = await prisma.automation.findMany({
+      where: { userId: authReq.user!.userId },
       orderBy: { createdAt: "desc" },
     });
     res.json(automations);
@@ -406,7 +643,8 @@ app.get("/api/automations", async (req: Request, res: Response) => {
   }
 });
 
-app.post("/api/automations", async (req: Request, res: Response) => {
+app.post("/api/automations", authenticateToken, async (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
   const { name, triggerType, trigger, message, status, targetPostId } = req.body;
   if (!name || !triggerType || !trigger || !message) {
     res.status(400).json({ error: "Missing required fields" });
@@ -423,6 +661,7 @@ app.post("/api/automations", async (req: Request, res: Response) => {
         targetPostId: targetPostId || null,
         sent: 0,
         conversion: "0.0%",
+        userId: authReq.user!.userId,
       },
     });
     res.status(201).json(newAuto);
@@ -431,12 +670,13 @@ app.post("/api/automations", async (req: Request, res: Response) => {
   }
 });
 
-app.put("/api/automations/:id", async (req: Request, res: Response) => {
+app.put("/api/automations/:id", authenticateToken, async (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
   const { id } = req.params;
   const { name, triggerType, trigger, message, status, sent, targetPostId } = req.body;
   try {
     const updated = await prisma.automation.update({
-      where: { id },
+      where: { id, userId: authReq.user!.userId },
       data: {
         name,
         triggerType,
@@ -453,11 +693,12 @@ app.put("/api/automations/:id", async (req: Request, res: Response) => {
   }
 });
 
-app.delete("/api/automations/:id", async (req: Request, res: Response) => {
+app.delete("/api/automations/:id", authenticateToken, async (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
   const { id } = req.params;
   try {
     await prisma.automation.delete({
-      where: { id },
+      where: { id, userId: authReq.user!.userId },
     });
     res.json({ success: true });
   } catch {
@@ -466,9 +707,11 @@ app.delete("/api/automations/:id", async (req: Request, res: Response) => {
 });
 
 // 2. Leads
-app.get("/api/leads", async (req: Request, res: Response) => {
+app.get("/api/leads", authenticateToken, async (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
   try {
     const leads = await prisma.lead.findMany({
+      where: { userId: authReq.user!.userId },
       orderBy: { updatedAt: "desc" },
     });
     res.json(leads);
@@ -477,12 +720,13 @@ app.get("/api/leads", async (req: Request, res: Response) => {
   }
 });
 
-app.put("/api/leads/:id", async (req: Request, res: Response) => {
+app.put("/api/leads/:id", authenticateToken, async (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
   const { id } = req.params;
   const { status } = req.body;
   try {
     const updated = await prisma.lead.update({
-      where: { id },
+      where: { id, userId: authReq.user!.userId },
       data: { status },
     });
     res.json(updated);
@@ -492,7 +736,8 @@ app.put("/api/leads/:id", async (req: Request, res: Response) => {
 });
 
 // Force expire a lead's last interaction time (for testing 24h guard)
-app.post("/api/leads/expire", async (req: Request, res: Response) => {
+app.post("/api/leads/expire", authenticateToken, async (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
   const { username, offsetHours } = req.body;
   if (!username) {
     res.status(400).json({ error: "username is required" });
@@ -504,13 +749,13 @@ app.post("/api/leads/expire", async (req: Request, res: Response) => {
   const targetDate = new Date(Date.now() - offsetMs);
 
   try {
-    const existing = await prisma.lead.findUnique({
-      where: { username },
+    const existing = await prisma.lead.findFirst({
+      where: { username, userId: authReq.user!.userId },
     });
 
     if (existing) {
       const updated = await prisma.lead.update({
-        where: { username },
+        where: { id: existing.id },
         data: {
           updatedAt: targetDate,
         },
@@ -528,6 +773,7 @@ app.post("/api/leads/expire", async (req: Request, res: Response) => {
           source: "DM",
           lastMessage: "Forced past seed message",
           updatedAt: targetDate,
+          userId: authReq.user!.userId,
         },
       });
       console.log(`⏱️ [Guard Test] Created mock past Lead @${username} (Offset: ${hours} hours).`);
@@ -539,9 +785,11 @@ app.post("/api/leads/expire", async (req: Request, res: Response) => {
 });
 
 // 3. Templates
-app.get("/api/templates", async (req: Request, res: Response) => {
+app.get("/api/templates", authenticateToken, async (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
   try {
     const templates = await prisma.template.findMany({
+      where: { userId: authReq.user!.userId },
       orderBy: { createdAt: "asc" },
     });
     res.json(templates);
@@ -550,11 +798,17 @@ app.get("/api/templates", async (req: Request, res: Response) => {
   }
 });
 
-app.post("/api/templates", async (req: Request, res: Response) => {
+app.post("/api/templates", authenticateToken, async (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
   const { name, content, type } = req.body;
   try {
     const newTemp = await prisma.template.create({
-      data: { name, content, type },
+      data: {
+        name,
+        content,
+        type,
+        userId: authReq.user!.userId,
+      },
     });
     res.status(201).json(newTemp);
   } catch {
@@ -562,10 +816,13 @@ app.post("/api/templates", async (req: Request, res: Response) => {
   }
 });
 
-app.delete("/api/templates/:id", async (req: Request, res: Response) => {
+app.delete("/api/templates/:id", authenticateToken, async (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
   const { id } = req.params;
   try {
-    await prisma.template.delete({ where: { id } });
+    await prisma.template.delete({
+      where: { id, userId: authReq.user!.userId },
+    });
     res.json({ success: true });
   } catch {
     res.status(500).json({ error: "Failed to delete template" });
@@ -573,9 +830,11 @@ app.delete("/api/templates/:id", async (req: Request, res: Response) => {
 });
 
 // 4. Events (Log stream)
-app.get("/api/events", async (req: Request, res: Response) => {
+app.get("/api/events", authenticateToken, async (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
   try {
     const logs = await prisma.eventLog.findMany({
+      where: { userId: authReq.user!.userId },
       orderBy: { createdAt: "desc" },
       take: 50,
     });
@@ -585,9 +844,12 @@ app.get("/api/events", async (req: Request, res: Response) => {
   }
 });
 
-app.post("/api/events/clear", async (req: Request, res: Response) => {
+app.post("/api/events/clear", authenticateToken, async (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
   try {
-    await prisma.eventLog.deleteMany({});
+    await prisma.eventLog.deleteMany({
+      where: { userId: authReq.user!.userId },
+    });
     res.json({ success: true });
   } catch {
     res.status(500).json({ error: "Failed to clear logs" });
@@ -595,7 +857,8 @@ app.post("/api/events/clear", async (req: Request, res: Response) => {
 });
 
 // 5. Simulator Endpoint (Now triggers engine evaluation and enqueues)
-app.post("/api/simulator", async (req: Request, res: Response) => {
+app.post("/api/simulator", authenticateToken, async (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
   const { username, triggerType, text, mediaId } = req.body;
   if (!username || !triggerType || !text) {
     res.status(400).json({ error: "Missing simulation params" });
@@ -604,13 +867,14 @@ app.post("/api/simulator", async (req: Request, res: Response) => {
 
   const cleanUser = username.startsWith("@") ? username.slice(1) : username;
   const cleanText = text.trim();
+  const userId = authReq.user!.userId;
   
   const now = new Date();
   const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
   try {
     // Evaluate match in Trigger Engine
-    const matchResult = await evaluateTrigger(cleanText, triggerType, mediaId);
+    const matchResult = await evaluateTrigger(cleanText, triggerType, mediaId, userId);
 
     if (matchResult.matched && matchResult.automation) {
       const mockEventId = `sim-msg-${Date.now()}`;
@@ -622,7 +886,7 @@ app.post("/api/simulator", async (req: Request, res: Response) => {
       });
 
       // Enqueue actual candidate message
-      await enqueueMessage(cleanUser, matchResult.automation.id, renderedMsg);
+      await enqueueMessage(cleanUser, matchResult.automation.id, renderedMsg, userId);
 
       // Log matching success
       await prisma.eventLog.create({
@@ -632,23 +896,24 @@ app.post("/api/simulator", async (req: Request, res: Response) => {
           type: triggerType === "comment" ? "댓글 매칭" : "DM 매칭",
           text: `@${cleanUser} 님의 메시지에 '${matchResult.automation.name}' 규칙 매칭성공 (대기열 등록)`,
           status: "success",
+          userId,
         },
       });
 
       // Update Automation stats
       await prisma.automation.update({
-        where: { id: matchResult.automation.id },
+        where: { id: matchResult.automation.id, userId },
         data: { sent: { increment: 1 } },
       });
 
       // Update or Add Lead
-      const existingLead = await prisma.lead.findUnique({
-        where: { username: cleanUser },
+      const existingLead = await prisma.lead.findFirst({
+        where: { username: cleanUser, userId },
       });
 
       if (existingLead) {
         await prisma.lead.update({
-          where: { username: cleanUser },
+          where: { id: existingLead.id },
           data: {
             lastActive: "방금 전",
             messagesCount: { increment: 1 },
@@ -664,6 +929,7 @@ app.post("/api/simulator", async (req: Request, res: Response) => {
             status: "대기",
             source: triggerType === "comment" ? "댓글" : "DM",
             lastMessage: cleanText,
+            userId,
           },
         });
       }
@@ -681,6 +947,8 @@ app.post("/api/simulator", async (req: Request, res: Response) => {
           type: triggerType === "comment" ? "댓글 미매칭" : "DM 미매칭",
           text: `@${cleanUser} 님의 입력 '${cleanText}'에 일치하는 활성 키워드가 없습니다.`,
           status: "warning",
+          userId,
+          eventId: `sim-fail-${Date.now()}`,
         },
       });
 
@@ -696,7 +964,8 @@ app.post("/api/simulator", async (req: Request, res: Response) => {
 
 // 6. Meta OAuth Mock Flows
 app.get("/api/auth/facebook", (req: Request, res: Response) => {
-  const redirectUri = `http://localhost:${PORT}/api/auth/facebook/callback`;
+  const token = req.query.token as string;
+  const redirectUri = `http://localhost:${PORT}/api/auth/facebook/callback?code=mock_code_abc&token=${token || ""}`;
   const html = `
     <!DOCTYPE html>
     <html lang="ko">
@@ -776,11 +1045,14 @@ app.get("/api/auth/facebook", (req: Request, res: Response) => {
 });
 
 app.get("/api/auth/facebook/callback", async (req: Request, res: Response) => {
-  const { code } = req.query;
+  const { code, token } = req.query;
   if (!code) {
     res.status(400).send("Authorization code missing");
     return;
   }
+
+  const decoded = token ? verifyToken(token as string) : null;
+  const userId = decoded ? decoded.userId : null;
 
   try {
     const expires = new Date();
@@ -792,12 +1064,14 @@ app.get("/api/auth/facebook/callback", async (req: Request, res: Response) => {
         username: "dml.studio",
         accessToken: `access_token_${code}_${Date.now()}`,
         tokenExpires: expires,
+        userId,
       },
       create: {
         instagramId: "ig_dml_studio_12345",
         username: "dml.studio",
         accessToken: `access_token_${code}_${Date.now()}`,
         tokenExpires: expires,
+        userId,
       },
     });
 
@@ -807,6 +1081,8 @@ app.get("/api/auth/facebook/callback", async (req: Request, res: Response) => {
         type: "Meta 연결",
         text: "Instagram Professional 계정 'dml.studio' 연동 완료 (토큰 정상)",
         status: "success",
+        userId,
+        eventId: `meta-connect-${Date.now()}`,
       },
     });
 
@@ -830,9 +1106,13 @@ app.get("/api/auth/facebook/callback", async (req: Request, res: Response) => {
   }
 });
 
-app.get("/api/settings/meta", async (req: Request, res: Response) => {
+app.get("/api/settings/meta", authenticateToken, async (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  const userId = authReq.user!.userId;
   try {
-    const account = await prisma.account.findFirst();
+    const account = await prisma.account.findFirst({
+      where: { userId },
+    });
     res.json({
       connected: !!account,
       account: account || null,
@@ -842,11 +1122,15 @@ app.get("/api/settings/meta", async (req: Request, res: Response) => {
   }
 });
 
-app.post("/api/settings/meta", async (req: Request, res: Response) => {
+app.post("/api/settings/meta", authenticateToken, async (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  const userId = authReq.user!.userId;
   const { action } = req.body;
   try {
     if (action === "disconnect") {
-      await prisma.account.deleteMany({});
+      await prisma.account.deleteMany({
+        where: { userId },
+      });
       
       await prisma.eventLog.create({
         data: {
@@ -854,6 +1138,8 @@ app.post("/api/settings/meta", async (req: Request, res: Response) => {
           type: "Meta 연결 해제",
           text: "사용자에 의해 Instagram 계정 연동 해제됨",
           status: "warning",
+          userId,
+          eventId: `meta-disconnect-${Date.now()}`,
         },
       });
 
@@ -867,14 +1153,18 @@ app.post("/api/settings/meta", async (req: Request, res: Response) => {
 });
 
 // Update daily limit endpoint
-app.post("/api/settings/limit", async (req: Request, res: Response) => {
+app.post("/api/settings/limit", authenticateToken, async (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  const userId = authReq.user!.userId;
   const { dailyLimit } = req.body;
   if (typeof dailyLimit !== "number" || dailyLimit < 1) {
     res.status(400).json({ error: "Invalid daily limit value" });
     return;
   }
   try {
-    const account = await prisma.account.findFirst();
+    const account = await prisma.account.findFirst({
+      where: { userId },
+    });
     if (!account) {
       res.status(400).json({ error: "No Meta account connected to set limit" });
       return;
@@ -936,7 +1226,9 @@ app.get("/api/auth/deletion/status", (req: Request, res: Response) => {
 });
 
 // Change paywall pricing plan endpoint
-app.post("/api/settings/plan", async (req: Request, res: Response) => {
+app.post("/api/settings/plan", authenticateToken, async (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  const userId = authReq.user!.userId;
   const { plan } = req.body; // "basic" | "pro"
   if (plan !== "basic" && plan !== "pro") {
     res.status(400).json({ error: "Invalid pricing plan" });
@@ -946,7 +1238,9 @@ app.post("/api/settings/plan", async (req: Request, res: Response) => {
   const limit = plan === "basic" ? 100 : 1000;
 
   try {
-    const account = await prisma.account.findFirst();
+    const account = await prisma.account.findFirst({
+      where: { userId },
+    });
     if (!account) {
       res.status(400).json({ error: "Meta 계정 연동 상태가 아닙니다. 먼저 로그인을 완료해주세요." });
       return;
@@ -963,6 +1257,7 @@ app.post("/api/settings/plan", async (req: Request, res: Response) => {
         type: "플랜 변경",
         text: `서비스 요금 플랜이 '${plan.toUpperCase()}'으로 변경되었습니다 (일일 한도: ${limit}건).`,
         status: "info",
+        userId,
         eventId: `plan-change-${Date.now()}`,
       },
     });
@@ -978,10 +1273,14 @@ app.post("/api/settings/plan", async (req: Request, res: Response) => {
 });
 
 // Update notification URL endpoint
-app.post("/api/settings/notification", async (req: Request, res: Response) => {
+app.post("/api/settings/notification", authenticateToken, async (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  const userId = authReq.user!.userId;
   const { notificationUrl } = req.body;
   try {
-    const account = await prisma.account.findFirst();
+    const account = await prisma.account.findFirst({
+      where: { userId },
+    });
     if (!account) {
       res.status(400).json({ error: "No Meta account connected to configure notification" });
       return;
@@ -1015,7 +1314,8 @@ app.post("/api/settings/notification/test", async (req: Request, res: Response) 
 });
 
 // GET 7-day stats analytics
-app.get("/api/stats/analytics", async (req: Request, res: Response) => {
+app.get("/api/stats/analytics", authenticateToken, async (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
   try {
     const data = [];
     for (let i = 6; i >= 0; i--) {
@@ -1032,10 +1332,11 @@ app.get("/api/stats/analytics", async (req: Request, res: Response) => {
       const endOfDay = new Date(d);
       endOfDay.setHours(23, 59, 59, 999);
 
-      // Count completed sends on this day
+      // Count completed sends on this day for current user
       const sentCount = await prisma.queueItem.count({
         where: {
           status: "COMPLETED",
+          userId: authReq.user!.userId,
           createdAt: {
             gte: startOfDay,
             lte: endOfDay,
@@ -1043,10 +1344,11 @@ app.get("/api/stats/analytics", async (req: Request, res: Response) => {
         },
       });
 
-      // Count leads converted to "전환완료" on this day
+      // Count leads converted to "전환완료" on this day for current user
       const convertedCount = await prisma.lead.count({
         where: {
           status: "전환완료",
+          userId: authReq.user!.userId,
           updatedAt: {
             gte: startOfDay,
             lte: endOfDay,
@@ -1068,9 +1370,11 @@ app.get("/api/stats/analytics", async (req: Request, res: Response) => {
 });
 
 // 7. Queue Item Monitoring routes
-app.get("/api/queue", async (req: Request, res: Response) => {
+app.get("/api/queue", authenticateToken, async (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
   try {
     const queue = await prisma.queueItem.findMany({
+      where: { userId: authReq.user!.userId },
       orderBy: { createdAt: "desc" },
     });
     res.json(queue);
@@ -1079,9 +1383,12 @@ app.get("/api/queue", async (req: Request, res: Response) => {
   }
 });
 
-app.post("/api/queue/clear", async (req: Request, res: Response) => {
+app.post("/api/queue/clear", authenticateToken, async (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
   try {
-    await prisma.queueItem.deleteMany({});
+    await prisma.queueItem.deleteMany({
+      where: { userId: authReq.user!.userId },
+    });
     res.json({ success: true });
   } catch {
     res.status(500).json({ error: "Failed to clear queue" });

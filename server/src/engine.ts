@@ -17,16 +17,18 @@ export interface MatchResult {
 export async function evaluateTrigger(
   text: string,
   type: "comment" | "dm",
-  mediaId?: string
+  mediaId?: string,
+  userId?: string
 ): Promise<MatchResult> {
   const cleanText = text.trim().toLowerCase();
 
   try {
-    // Fetch only active ('운영중') automations matching the triggerType
+    // Fetch only active ('운영중') automations matching the triggerType and tenant
     const activeAutomations = await prisma.automation.findMany({
       where: {
         status: "운영중",
         triggerType: type,
+        userId: userId || undefined,
       },
     });
 
@@ -104,7 +106,8 @@ export function renderTemplate(
 export async function enqueueMessage(
   recipientId: string,
   automationId: string,
-  body: string
+  body: string,
+  userId?: string
 ): Promise<boolean> {
   try {
     await prisma.queueItem.create({
@@ -113,9 +116,10 @@ export async function enqueueMessage(
         automationId,
         body,
         status: "PENDING",
+        userId,
       },
     });
-    console.log(`📦 Message enqueued for recipient: @${recipientId} (Status: PENDING)`);
+    console.log(`📦 Message enqueued for recipient: @${recipientId} (Status: PENDING, User: ${userId})`);
     return true;
   } catch (error) {
     console.error("Error enqueuing message in engine:", error);

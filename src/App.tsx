@@ -96,7 +96,7 @@ const API_BASE = "http://localhost:5000/api";
 
 function App() {
   // Tab State
-  const [activeTab, setActiveTab] = useState<"dashboard" | "automations" | "leads" | "templates" | "settings">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "automations" | "leads" | "templates" | "settings" | "admin">("dashboard");
 
   // Domain State (API Integrated)
   const [automations, setAutomations] = useState<Automation[]>([]);
@@ -105,6 +105,21 @@ function App() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [analyticsData, setAnalyticsData] = useState<AnalyticsItem[]>([]);
+
+  // Auth Session State (고도화 5단계)
+  const [user, setUser] = useState<{ id: string; email: string; name: string; role: string } | null>(null);
+  const [token, setToken] = useState<string | null>(localStorage.getItem("dml_token"));
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [emailInput, setEmailInput] = useState<string>("");
+  const [passwordInput, setPasswordInput] = useState<string>("");
+  const [nameInput, setNameInput] = useState<string>("");
+  const [authError, setAuthError] = useState<string>("");
+
+  // Admin Dashboard State (고도화 5단계)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [adminUsers, setAdminUsers] = useState<any[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [adminLogs, setAdminLogs] = useState<any[]>([]);
 
   // Meta Integration State
   const [metaConnected, setMetaConnected] = useState<boolean>(false);
@@ -147,9 +162,35 @@ function App() {
   // ==========================================
   // API Fetching Functions
   // ==========================================
+  // Restore Auth Session on Mount
+  useEffect(() => {
+    const restoreSession = async () => {
+      const savedToken = localStorage.getItem("dml_token");
+      if (!savedToken) return;
+      try {
+        const res = await fetch(`${API_BASE}/auth/me`, {
+          headers: { Authorization: `Bearer ${savedToken}` },
+        });
+        if (res.ok) {
+          const userData = await res.json();
+          setUser(userData);
+          setToken(savedToken);
+        } else {
+          localStorage.removeItem("dml_token");
+        }
+      } catch {
+        localStorage.removeItem("dml_token");
+      }
+    };
+    restoreSession();
+  }, []);
+
   const fetchAutomations = useCallback(async () => {
+    if (!token) return;
     try {
-      const res = await fetch(`${API_BASE}/automations`);
+      const res = await fetch(`${API_BASE}/automations`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (res.ok) {
         const data = await res.json();
         setAutomations(data);
@@ -157,11 +198,14 @@ function App() {
     } catch (err) {
       console.error("Error fetching automations", err);
     }
-  }, []);
+  }, [token]);
 
   const fetchEvents = useCallback(async () => {
+    if (!token) return;
     try {
-      const res = await fetch(`${API_BASE}/events`);
+      const res = await fetch(`${API_BASE}/events`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (res.ok) {
         const data = await res.json();
         setEvents(data);
@@ -169,11 +213,14 @@ function App() {
     } catch (err) {
       console.error("Error fetching events", err);
     }
-  }, []);
+  }, [token]);
 
   const fetchLeads = useCallback(async () => {
+    if (!token) return;
     try {
-      const res = await fetch(`${API_BASE}/leads`);
+      const res = await fetch(`${API_BASE}/leads`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (res.ok) {
         const data = await res.json();
         setLeads(data);
@@ -181,11 +228,14 @@ function App() {
     } catch (err) {
       console.error("Error fetching leads", err);
     }
-  }, []);
+  }, [token]);
 
   const fetchTemplates = useCallback(async () => {
+    if (!token) return;
     try {
-      const res = await fetch(`${API_BASE}/templates`);
+      const res = await fetch(`${API_BASE}/templates`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (res.ok) {
         const data = await res.json();
         setTemplates(data);
@@ -193,11 +243,14 @@ function App() {
     } catch (err) {
       console.error("Error fetching templates", err);
     }
-  }, []);
+  }, [token]);
 
   const fetchQueue = useCallback(async () => {
+    if (!token) return;
     try {
-      const res = await fetch(`${API_BASE}/queue`);
+      const res = await fetch(`${API_BASE}/queue`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (res.ok) {
         const data = await res.json();
         setQueue(data);
@@ -205,11 +258,14 @@ function App() {
     } catch (err) {
       console.error("Error fetching queue", err);
     }
-  }, []);
+  }, [token]);
 
   const fetchAnalytics = useCallback(async () => {
+    if (!token) return;
     try {
-      const res = await fetch(`${API_BASE}/stats/analytics`);
+      const res = await fetch(`${API_BASE}/stats/analytics`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (res.ok) {
         const data = await res.json();
         setAnalyticsData(data);
@@ -217,11 +273,14 @@ function App() {
     } catch (err) {
       console.error("Error fetching analytics data", err);
     }
-  }, []);
+  }, [token]);
 
   const fetchMetaStatus = useCallback(async () => {
+    if (!token) return;
     try {
-      const res = await fetch(`${API_BASE}/settings/meta`);
+      const res = await fetch(`${API_BASE}/settings/meta`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (res.ok) {
         const data = await res.json();
         setMetaConnected(data.connected);
@@ -236,7 +295,30 @@ function App() {
     } catch (err) {
       console.error("Error fetching Meta status", err);
     }
-  }, []);
+  }, [token]);
+
+  const fetchAdminData = useCallback(async () => {
+    if (!token || user?.role !== "ADMIN") return;
+    try {
+      const usersRes = await fetch(`${API_BASE}/admin/users`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (usersRes.ok) {
+        const usersData = await usersRes.json();
+        setAdminUsers(usersData);
+      }
+
+      const logsRes = await fetch(`${API_BASE}/admin/system-logs`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (logsRes.ok) {
+        const logsData = await logsRes.json();
+        setAdminLogs(logsData);
+      }
+    } catch (err) {
+      console.error("Error fetching admin data", err);
+    }
+  }, [token, user]);
 
   const refetchAll = useCallback(() => {
     fetchAutomations();
@@ -246,13 +328,99 @@ function App() {
     fetchQueue();
     fetchAnalytics();
     fetchMetaStatus();
-  }, [fetchAutomations, fetchEvents, fetchLeads, fetchTemplates, fetchQueue, fetchAnalytics, fetchMetaStatus]);
+    if (user?.role === "ADMIN") {
+      fetchAdminData();
+    }
+  }, [fetchAutomations, fetchEvents, fetchLeads, fetchTemplates, fetchQueue, fetchAnalytics, fetchMetaStatus, fetchAdminData, user]);
 
   // Initial load
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    refetchAll();
-  }, [refetchAll]);
+    if (token) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      refetchAll();
+    }
+  }, [refetchAll, token]);
+
+  // Trigger admin fetch on tab activation
+  useEffect(() => {
+    if (activeTab === "admin") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      fetchAdminData();
+    }
+  }, [activeTab, fetchAdminData]);
+
+  // ==========================================
+  // Auth Submit Handlers (고도화 5단계)
+  // ==========================================
+  const handleAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError("");
+
+    if (authMode === "login") {
+      if (!emailInput || !passwordInput) {
+        setAuthError("이메일과 비밀번호를 모두 입력해 주세요.");
+        return;
+      }
+      try {
+        const res = await fetch(`${API_BASE}/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: emailInput, password: passwordInput }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          localStorage.setItem("dml_token", data.token);
+          setToken(data.token);
+          setUser(data.user);
+          setEmailInput("");
+          setPasswordInput("");
+        } else {
+          setAuthError(data.error || "로그인에 실패했습니다.");
+        }
+      } catch {
+        setAuthError("서버와의 통신에 실패했습니다.");
+      }
+    } else {
+      if (!emailInput || !passwordInput || !nameInput) {
+        setAuthError("모든 필수 항목을 기입해 주세요.");
+        return;
+      }
+      try {
+        const res = await fetch(`${API_BASE}/auth/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: emailInput, password: passwordInput, name: nameInput }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          localStorage.setItem("dml_token", data.token);
+          setToken(data.token);
+          setUser(data.user);
+          setEmailInput("");
+          setPasswordInput("");
+          setNameInput("");
+        } else {
+          setAuthError(data.error || "회원가입에 실패했습니다.");
+        }
+      } catch {
+        setAuthError("서버와의 통신에 실패했습니다.");
+      }
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("dml_token");
+    setToken(null);
+    setUser(null);
+    setAutomations([]);
+    setEvents([]);
+    setLeads([]);
+    setTemplates([]);
+    setQueue([]);
+    setAnalyticsData([]);
+    setMetaConnected(false);
+    setMetaAccount(null);
+  };
 
   // Realtime Polling (3s interval)
   useEffect(() => {
@@ -310,7 +478,10 @@ function App() {
     try {
       const res = await fetch(`${API_BASE}/simulator`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           username: simulatorUser,
           triggerType: simulatorType,
@@ -359,7 +530,10 @@ function App() {
 
       const res = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify(newAuto),
       });
 
@@ -397,6 +571,7 @@ function App() {
       try {
         const res = await fetch(`${API_BASE}/automations/${id}`, {
           method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {
           fetchAutomations();
@@ -421,7 +596,10 @@ function App() {
     try {
       const res = await fetch(`${API_BASE}/automations/${id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ ...auto, status: nextStatus }),
       });
       if (res.ok) {
@@ -440,7 +618,10 @@ function App() {
     try {
       const res = await fetch(`${API_BASE}/templates`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify(newTemp),
       });
       if (res.ok) {
@@ -456,6 +637,7 @@ function App() {
     try {
       const res = await fetch(`${API_BASE}/templates/${id}`, {
         method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         fetchTemplates();
@@ -482,7 +664,7 @@ function App() {
     const top = window.screen.height / 2 - height / 2;
 
     window.open(
-      "http://localhost:5000/api/auth/facebook",
+      `http://localhost:5000/api/auth/facebook?token=${token}`,
       "facebook-oauth-mock",
       `width=${width},height=${height},top=${top},left=${left},scrollbars=no,resizable=no`
     );
@@ -492,7 +674,10 @@ function App() {
     try {
       const res = await fetch(`${API_BASE}/settings/meta`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ action: "disconnect" }),
       });
       if (res.ok) {
@@ -511,7 +696,10 @@ function App() {
     try {
       const res = await fetch(`${API_BASE}/settings/limit`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ dailyLimit: Number(dailyLimitInput) }),
       });
       if (res.ok) {
@@ -531,7 +719,10 @@ function App() {
     try {
       const res = await fetch(`${API_BASE}/settings/plan`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ plan: selectedPlan }),
       });
       if (res.ok) {
@@ -553,7 +744,10 @@ function App() {
     try {
       const res = await fetch(`${API_BASE}/settings/notification`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ notificationUrl: notificationUrlInput }),
       });
       if (res.ok) {
@@ -576,7 +770,10 @@ function App() {
     try {
       const res = await fetch(`${API_BASE}/settings/notification/test`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ notificationUrl: notificationUrlInput }),
       });
       if (res.ok) {
@@ -625,7 +822,10 @@ function App() {
     try {
       const res = await fetch(`${API_BASE}/leads/${leadId}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ status: nextStatus }),
       });
       if (res.ok) {
@@ -689,6 +889,82 @@ function App() {
 
 
 
+  if (!token || !user) {
+    return (
+      <main className="app-shell" style={{ display: "grid", placeItems: "center", minHeight: "100vh", background: "#0b0f19" }}>
+        <div style={{ background: "rgba(30, 41, 59, 0.7)", border: "1px solid var(--border-color)", borderRadius: "16px", padding: "40px", width: "420px", backdropFilter: "blur(15px)", boxShadow: "0 20px 40px rgba(0,0,0,0.4)" }} className="animate-fade-in">
+          <div style={{ textAlign: "center", marginBottom: "30px" }}>
+            <div style={{ display: "inline-flex", width: "48px", height: "48px", background: "var(--accent-emerald)", borderRadius: "12px", alignItems: "center", justifyContent: "center", marginBottom: "15px", color: "#000" }}>
+              <Camera size={26} />
+            </div>
+            <h1 style={{ fontSize: "24px", fontWeight: "800", color: "var(--text-primary)", margin: "0 0 5px" }}>DM Launch</h1>
+            <p style={{ fontSize: "13px", color: "var(--text-secondary)", margin: 0 }}>인스타그램 고객 소통 자동화 마케팅 솔루션</p>
+          </div>
+
+          <form onSubmit={handleAuthSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            {authMode === "register" && (
+              <div className="form-group">
+                <label>이름</label>
+                <input
+                  type="text"
+                  placeholder="홍길동"
+                  value={nameInput}
+                  onChange={(e) => setNameInput(e.target.value)}
+                  required
+                />
+              </div>
+            )}
+
+            <div className="form-group">
+              <label>이메일 주소 (아이디)</label>
+              <input
+                type="email"
+                placeholder="example@gowith153.com"
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label>비밀번호</label>
+              <input
+                type="password"
+                placeholder="••••••••"
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                required
+              />
+            </div>
+
+            {authError && (
+              <div style={{ color: "var(--accent-rose)", fontSize: "12px", fontWeight: "600", background: "rgba(244,63,94,0.1)", padding: "10px", borderRadius: "8px", border: "1px solid rgba(244,63,94,0.2)" }}>
+                ⚠️ {authError}
+              </div>
+            )}
+
+            <button type="submit" className="primary-button" style={{ height: "45px", fontSize: "14px", fontWeight: "700", width: "100%", justifyContent: "center", marginTop: "10px" }}>
+              {authMode === "login" ? "로그인하기" : "가입하기"}
+            </button>
+          </form>
+
+          <div style={{ textAlign: "center", marginTop: "25px", fontSize: "13px", color: "var(--text-secondary)" }}>
+            {authMode === "login" ? "아직 계정이 없으신가요?" : "이미 계정이 있으신가요?"}
+            <button
+              onClick={() => {
+                setAuthMode(authMode === "login" ? "register" : "login");
+                setAuthError("");
+              }}
+              style={{ color: "var(--accent-emerald)", fontWeight: "700", marginLeft: "6px", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
+            >
+              {authMode === "login" ? "회원가입" : "로그인"}
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="app-shell">
       {/* Sidebar */}
@@ -734,6 +1010,15 @@ function App() {
           >
             <Cog size={18} /> 연결 및 설정
           </button>
+          {user?.role === "ADMIN" && (
+            <button
+              className={`nav-item ${activeTab === "admin" ? "active" : ""}`}
+              onClick={() => setActiveTab("admin")}
+              style={{ borderTop: "1px solid rgba(255,255,255,0.04)", marginTop: "10px", paddingTop: "15px" }}
+            >
+              <Users size={18} style={{ color: "var(--accent-emerald)" }} /> 어드민 콘솔 (운영자)
+            </button>
+          )}
         </nav>
 
         <section className="connect-panel">
@@ -763,9 +1048,20 @@ function App() {
               {activeTab === "leads" && "연결된 리드 관리"}
               {activeTab === "templates" && "메시지 템플릿 관리"}
               {activeTab === "settings" && "서비스 연결 및 API 설정"}
+              {activeTab === "admin" && "중앙 어드민 관제 센터"}
             </h1>
           </div>
           <div className="top-actions">
+            {user && (
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginRight: "10px", fontSize: "13px" }}>
+                <span style={{ color: "var(--text-secondary)" }}>
+                  <strong style={{ color: "var(--text-primary)" }}>{user.name}</strong> 님 ({user.role === "ADMIN" ? "어드민" : "구매자"})
+                </span>
+                <button onClick={handleLogout} className="ghost-button" style={{ height: "32px", padding: "0 10px", fontSize: "11px", borderColor: "rgba(244,63,94,0.3)", color: "#fb7185" }}>
+                  로그아웃
+                </button>
+              </div>
+            )}
             <label className="search">
               <Search size={17} />
               <input placeholder="자동화, 리드, 이벤트 검색" />
@@ -1740,6 +2036,107 @@ function App() {
                 </div>
               </div>
             </div>
+          </section>
+        )}
+
+        {/* Tab View: Admin Console (고도화 5단계) */}
+        {activeTab === "admin" && user?.role === "ADMIN" && (
+          <section className="admin-panel animate-fade-in" style={{ display: "flex", flexDirection: "column", gap: "25px" }}>
+            
+            {/* Top Metrics */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "20px" }}>
+              <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", padding: "20px", borderRadius: "12px" }}>
+                <span style={{ fontSize: "12px", color: "var(--text-secondary)", fontWeight: "600" }}>총 가입 고객 수</span>
+                <strong style={{ display: "block", fontSize: "28px", color: "var(--accent-emerald)", marginTop: "5px" }}>
+                  {adminUsers.length}명
+                </strong>
+              </div>
+              <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", padding: "20px", borderRadius: "12px" }}>
+                <span style={{ fontSize: "12px", color: "var(--text-secondary)", fontWeight: "600" }}>총 유입 리드 수</span>
+                <strong style={{ display: "block", fontSize: "28px", color: "#38bdf8", marginTop: "5px" }}>
+                  {adminUsers.reduce((sum, u) => sum + u.leadsCount, 0)}명
+                </strong>
+              </div>
+              <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", padding: "20px", borderRadius: "12px" }}>
+                <span style={{ fontSize: "12px", color: "var(--text-secondary)", fontWeight: "600" }}>시스템 누적 오류 횟수</span>
+                <strong style={{ display: "block", fontSize: "28px", color: "var(--accent-rose)", marginTop: "5px" }}>
+                  {adminLogs.length}건
+                </strong>
+              </div>
+            </div>
+
+            {/* Customers list card */}
+            <div className="automation-panel">
+              <div className="section-header">
+                <div>
+                  <p className="eyebrow">Customer Directory</p>
+                  <h2>가입 구매자 및 이용 통계</h2>
+                </div>
+              </div>
+              <div className="table">
+                <div className="table-row table-head" style={{ gridTemplateColumns: "1.2fr 1.8fr 1fr 1fr 1fr" }}>
+                  <span>구매자 명</span>
+                  <span>이메일 주소</span>
+                  <span>연결 계정</span>
+                  <span>활성 플로우</span>
+                  <span>유치 리드</span>
+                </div>
+                {adminUsers.length === 0 ? (
+                  <div className="empty-state" style={{ padding: "30px" }}>
+                    <p>가입한 구매자 계정이 아직 없습니다.</p>
+                  </div>
+                ) : (
+                  adminUsers.map((u) => (
+                    <div className="table-row" key={u.id} style={{ gridTemplateColumns: "1.2fr 1.8fr 1fr 1fr 1fr" }}>
+                      <strong>{u.name}</strong>
+                      <span style={{ color: "var(--text-secondary)" }}>{u.email}</span>
+                      <span style={{ color: "var(--accent-emerald)", fontWeight: "600" }}>{u.connectedAccount}</span>
+                      <span>{u.flowsCount}개</span>
+                      <span>{u.leadsCount}명</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* System error queue items */}
+            <div className="automation-panel">
+              <div className="section-header">
+                <div>
+                  <p className="eyebrow">System Failure Queue Monitor</p>
+                  <h2>발송 실패 대기열 로그 관제</h2>
+                </div>
+                <AlertCircle size={20} style={{ color: "var(--accent-rose)" }} />
+              </div>
+              <div className="table">
+                <div className="table-row table-head" style={{ gridTemplateColumns: "1.5fr 1fr 2fr 1.5fr" }}>
+                  <span>고객 정보</span>
+                  <span>발송지 ID</span>
+                  <span>오류 세부 요인</span>
+                  <span>발송 시도 시각</span>
+                </div>
+                {adminLogs.length === 0 ? (
+                  <div className="empty-state" style={{ padding: "30px" }}>
+                    <p style={{ color: "var(--accent-emerald)" }}>✔️ 현재 시스템 전체에 미해결된 발송 오류 대기열이 없습니다.</p>
+                  </div>
+                ) : (
+                  adminLogs.map((log) => (
+                    <div className="table-row" key={log.id} style={{ gridTemplateColumns: "1.5fr 1fr 2fr 1.5fr" }}>
+                      <div>
+                        <strong>{log.userName}</strong>
+                        <small style={{ color: "var(--text-secondary)", display: "block" }}>{log.userEmail}</small>
+                      </div>
+                      <span style={{ fontFamily: "monospace", fontSize: "12px" }}>@{log.recipientId}</span>
+                      <span style={{ color: "var(--accent-rose)", fontSize: "12px" }}>{log.errorLog}</span>
+                      <span style={{ color: "var(--text-muted)", fontSize: "12px" }}>
+                        {new Date(log.createdAt).toLocaleString()}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
           </section>
         )}
       </section>
