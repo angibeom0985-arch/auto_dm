@@ -337,7 +337,6 @@ async function seedInitialData() {
       console.log("🌱 Default Automations seeded.");
     }
 
-    const adminUser = await prisma.user.findFirst({ where: { email: "admin@gowith153.com" } });
     const adminUserId = adminUser ? adminUser.id : null;
 
     const leadCount = await prisma.lead.count();
