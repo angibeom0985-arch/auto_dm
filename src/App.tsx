@@ -891,7 +891,7 @@ function App() {
 
   if (!token || !user) {
     return (
-      <main className="app-shell" style={{ display: "grid", placeItems: "center", minHeight: "100vh", background: "#0b0f19" }}>
+      <main style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", width: "100vw", background: "#0b0f19", position: "fixed", top: 0, left: 0, zIndex: 9999 }}>
         <div style={{ background: "rgba(30, 41, 59, 0.7)", border: "1px solid var(--border-color)", borderRadius: "16px", padding: "40px", width: "420px", backdropFilter: "blur(15px)", boxShadow: "0 20px 40px rgba(0,0,0,0.4)" }} className="animate-fade-in">
           <div style={{ textAlign: "center", marginBottom: "30px" }}>
             <div style={{ display: "inline-flex", width: "48px", height: "48px", background: "var(--accent-emerald)", borderRadius: "12px", alignItems: "center", justifyContent: "center", marginBottom: "15px", color: "#000" }}>
