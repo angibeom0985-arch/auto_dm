@@ -1054,11 +1054,11 @@ app.get("/api/stats/analytics", async (req: Request, res: Response) => {
         },
       });
 
-      // Add baseline for premium mock looks + real aggregated metrics
+      // 100% real aggregated metrics from database
       data.push({
         date: dateStr,
-        sent: sentCount + 120 + (i * 25) % 80, 
-        converted: convertedCount + 12 + (i * 7) % 25,
+        sent: sentCount,
+        converted: convertedCount,
       });
     }
     res.json(data);

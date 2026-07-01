@@ -8,18 +8,15 @@ import {
   CalendarClock,
   CheckCircle2,
   CircleDollarSign,
-  Clock3,
   Cog,
   FileText,
   KeyRound,
-  Link2,
   MessageSquareText,
   MousePointerClick,
   Plus,
   Search,
   Send,
   ShieldCheck,
-  Sparkles,
   Users,
   Workflow,
   Trash2,
@@ -97,14 +94,6 @@ interface AnalyticsItem {
 
 const API_BASE = "http://localhost:5000/api";
 
-const checklistItems = [
-  { id: "check-1", label: "Meta App 연결" },
-  { id: "check-2", label: "Instagram Business 인증" },
-  { id: "check-3", label: "Webhook 검증" },
-  { id: "check-4", label: "발송 정책 가드" },
-  { id: "check-5", label: "결제 플랜 준비" },
-];
-
 function App() {
   // Tab State
   const [activeTab, setActiveTab] = useState<"dashboard" | "automations" | "leads" | "templates" | "settings">("dashboard");
@@ -116,13 +105,6 @@ function App() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [analyticsData, setAnalyticsData] = useState<AnalyticsItem[]>([]);
-  const [checklist, setChecklist] = useState<{ [key: string]: boolean }>({
-    "check-1": false,
-    "check-2": false,
-    "check-3": true,
-    "check-4": false,
-    "check-5": false,
-  });
 
   // Meta Integration State
   const [metaConnected, setMetaConnected] = useState<boolean>(false);
@@ -249,21 +231,7 @@ function App() {
           setNotificationUrlInput(data.account.notificationUrl || "");
           const planName = data.account.dailyLimit <= 100 ? "basic" : "pro";
           setCurrentPlan(planName);
-          setChecklist((prev) => ({
-            ...prev,
-            "check-5": true,
-          }));
-        } else {
-          setChecklist((prev) => ({
-            ...prev,
-            "check-5": false,
-          }));
         }
-        setChecklist((prev) => ({
-          ...prev,
-          "check-1": data.connected,
-          "check-2": data.connected,
-        }));
       }
     } catch (err) {
       console.error("Error fetching Meta status", err);
@@ -306,10 +274,10 @@ function App() {
     const rate = leads.length > 0 ? (responseCount / leads.length) * 100 : 0;
 
     return {
-      sentToday: totalSent + 1726,
-      convertedLeads: converted + 94,
+      sentToday: totalSent,
+      convertedLeads: converted,
       pendingCount: pending,
-      responseRate: parseFloat((rate + 28.4).toFixed(1)),
+      responseRate: parseFloat(rate.toFixed(1)),
     };
   }, [automations, leads, queue]);
 
@@ -325,12 +293,6 @@ function App() {
           const planName = event.data.account.dailyLimit <= 100 ? "basic" : "pro";
           setCurrentPlan(planName);
         }
-        setChecklist((prev) => ({
-          ...prev,
-          "check-1": true,
-          "check-2": true,
-          "check-5": true,
-        }));
         fetchEvents();
         setMetaLoading(false);
       }
@@ -534,11 +496,10 @@ function App() {
         body: JSON.stringify({ action: "disconnect" }),
       });
       if (res.ok) {
-        setMetaConnected(false);
-        setMetaAccount(null);
-        setChecklist((prev) => ({ ...prev, "check-1": false, "check-2": false, "check-5": false }));
-        fetchEvents();
-      }
+          setMetaConnected(false);
+          setMetaAccount(null);
+          fetchEvents();
+        }
     } catch (err) {
       console.error("Failed to disconnect", err);
     }
@@ -653,18 +614,11 @@ function App() {
     setWebhookVerified(false);
     setTimeout(() => {
       setWebhookVerified(true);
-      setChecklist((prev) => ({ ...prev, "check-3": true }));
       fetchEvents();
     }, 1000);
   };
 
-  // Toggle checklist manually
-  const handleToggleChecklist = (id: string) => {
-    setChecklist((prev) => ({
-      ...prev,
-      [id]: !prev[id],
-    }));
-  };
+
 
   // Lead status changes
   const handleLeadStatusChange = async (leadId: string, nextStatus: Lead["status"]) => {
@@ -733,7 +687,7 @@ function App() {
     };
   }, [analyticsData]);
 
-  const isLaunchReady = Object.values(checklist).every((val) => val === true);
+
 
   return (
     <main className="app-shell">
@@ -832,16 +786,7 @@ function App() {
           </div>
         </header>
 
-        {/* Global Alert Notification */}
-        {isLaunchReady && activeTab === "dashboard" && (
-          <div className="alert-card success-banner animate-fade-in">
-            <Sparkles size={22} className="sparkle-icon" />
-            <div>
-              <strong>축하합니다! 모든 런칭 준비 단계가 완료되었습니다.</strong>
-              <p>Meta 앱 연결, Webhook 검증 및 발송 정책 체크가 완료되어 정식 서비스를 배포할 준비가 되었습니다.</p>
-            </div>
-          </div>
-        )}
+
 
         {/* Tab View: Dashboard */}
         {activeTab === "dashboard" && (
@@ -1137,7 +1082,7 @@ function App() {
                   </div>
 
                   <button type="submit" className="wide-button test-simulate-btn">
-                    <Sparkles size={17} /> 시뮬레이터 실행하기
+                    <Send size={17} /> 시뮬레이터 실행하기
                   </button>
                 </form>
 
@@ -1153,7 +1098,7 @@ function App() {
             </section>
 
             {/* Bottom Grid */}
-            <section className="bottom-grid">
+            <section className="bottom-grid" style={{ display: "grid", gridTemplateColumns: "1fr", gap: "20px" }}>
               {/* Event Logs */}
               <div className="activity-panel">
                 <div className="section-header">
@@ -1187,36 +1132,6 @@ function App() {
                       </div>
                     ))
                   )}
-                </div>
-              </div>
-
-              {/* Launch readiness */}
-              <div className="launch-panel">
-                <div className="section-header">
-                  <div>
-                    <p className="eyebrow">Launch Readiness</p>
-                    <h2>서비스 런칭 체크리스트</h2>
-                  </div>
-                  <Clock3 size={20} />
-                </div>
-                <div className="check-list">
-                  {checklistItems.map((item) => (
-                    <label className="check-item-label" key={item.id}>
-                      <input
-                        type="checkbox"
-                        checked={checklist[item.id] || false}
-                        onChange={() => handleToggleChecklist(item.id)}
-                      />
-                      <div className="check-box-ui">
-                        {checklist[item.id] ? <CheckCircle2 size={18} className="checked-icon" /> : <AlertCircle size={18} className="unchecked-icon" />}
-                      </div>
-                      <span className={checklist[item.id] ? "strikethrough" : ""}>{item.label}</span>
-                    </label>
-                  ))}
-                </div>
-                <div className="policy-note">
-                  <Link2 size={18} />
-                  <p>발송은 공식 API, 사용자 상호작용, 허용된 24시간 메시징 윈도우를 준수합니다.</p>
                 </div>
               </div>
             </section>
