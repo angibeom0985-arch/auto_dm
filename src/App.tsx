@@ -132,7 +132,6 @@ function App() {
 
   // Settings inputs
   const [dailyLimitInput, setDailyLimitInput] = useState<number>(150);
-  const [currentPlan, setCurrentPlan] = useState<"basic" | "pro">("basic");
   const [notificationUrlInput, setNotificationUrlInput] = useState<string>("");
 
   // Builder Input State
@@ -288,8 +287,6 @@ function App() {
         if (data.account) {
           setDailyLimitInput(data.account.dailyLimit);
           setNotificationUrlInput(data.account.notificationUrl || "");
-          const planName = data.account.dailyLimit <= 100 ? "basic" : "pro";
-          setCurrentPlan(planName);
         }
       }
     } catch (err) {
@@ -458,8 +455,6 @@ function App() {
         if (event.data.account) {
           setDailyLimitInput(event.data.account.dailyLimit);
           setNotificationUrlInput(event.data.account.notificationUrl || "");
-          const planName = event.data.account.dailyLimit <= 100 ? "basic" : "pro";
-          setCurrentPlan(planName);
         }
         fetchEvents();
         setMetaLoading(false);
@@ -714,29 +709,7 @@ function App() {
     }
   };
 
-  // 6. Update subscription plan
-  const handleUpdatePlan = async (selectedPlan: "basic" | "pro") => {
-    try {
-      const res = await fetch(`${API_BASE}/settings/plan`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ plan: selectedPlan }),
-      });
-      if (res.ok) {
-        setCurrentPlan(selectedPlan);
-        alert(`구독 요금 플랜이 [${selectedPlan.toUpperCase()}] 플랜으로 변경 연동되었습니다.`);
-        refetchAll();
-      } else {
-        const data = await res.json();
-        alert(data.error || "플랜 변경에 실패했습니다.");
-      }
-    } catch (err) {
-      console.error("Failed to update plan", err);
-    }
-  };
+
 
   // 7. Update Notification URL settings
   const handleSaveNotificationUrl = async (e: React.FormEvent) => {
@@ -1856,42 +1829,6 @@ function App() {
                     </p>
                   </div>
                 )}
-              </div>
-            </div>
-
-            {/* Paywall Subscription pricing plan setting panel */}
-            <div className="settings-section">
-              <h2>서비스 멤버십 플랜 변경</h2>
-              <p>도입 규모에 따라 인스타그램 API 일일 최대 한도를 차등 관리합니다.</p>
-              
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginTop: "12px" }}>
-                <div 
-                  className={`template-card ${currentPlan === "basic" ? "simulator-card" : ""}`} 
-                  onClick={() => handleUpdatePlan("basic")}
-                  style={{ cursor: "pointer", border: currentPlan === "basic" ? "1px solid var(--accent-emerald)" : "1px solid var(--border-color)", padding: "18px" }}
-                >
-                  <span className="template-badge" style={{ background: currentPlan === "basic" ? "var(--accent-emerald-glow)" : "rgba(255,255,255,0.03)" }}>BASIC PLAN</span>
-                  <h3 style={{ margin: "8px 0 4px" }}>베이직 요금제</h3>
-                  <p style={{ fontSize: "12px", color: "var(--text-secondary)" }}>월 29,000원</p>
-                  <p style={{ fontSize: "13px", color: "var(--text-primary)", marginTop: "10px" }}>🛡️ 일일 발송 제한: <strong>100건</strong></p>
-                  <button className="apply-temp-btn" style={{ marginTop: "12px", background: currentPlan === "basic" ? "var(--accent-emerald)" : "", color: currentPlan === "basic" ? "#050707" : "" }} disabled={currentPlan === "basic"}>
-                    {currentPlan === "basic" ? "사용 중인 플랜" : "베이직 선택"}
-                  </button>
-                </div>
-
-                <div 
-                  className={`template-card ${currentPlan === "pro" ? "simulator-card" : ""}`} 
-                  onClick={() => handleUpdatePlan("pro")}
-                  style={{ cursor: "pointer", border: currentPlan === "pro" ? "1px solid var(--accent-emerald)" : "1px solid var(--border-color)", padding: "18px" }}
-                >
-                  <span className="template-badge" style={{ background: currentPlan === "pro" ? "var(--accent-emerald-glow)" : "rgba(255,255,255,0.03)" }}>PRO PLAN</span>
-                  <h3 style={{ margin: "8px 0 4px" }}>프로 요금제</h3>
-                  <p style={{ fontSize: "12px", color: "var(--text-secondary)" }}>월 59,000원</p>
-                  <p style={{ fontSize: "13px", color: "var(--text-primary)", marginTop: "10px" }}>🔥 일일 발송 제한: <strong>1,000건</strong></p>
-                  <button className="apply-temp-btn" style={{ marginTop: "12px", background: currentPlan === "pro" ? "var(--accent-emerald)" : "", color: currentPlan === "pro" ? "#050707" : "" }} disabled={currentPlan === "pro"}>
-                    {currentPlan === "pro" ? "사용 중인 플랜" : "프로 선택"}
-                  </button>
-                </div>
               </div>
             </div>
 
