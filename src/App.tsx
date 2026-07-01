@@ -889,10 +889,10 @@ function App() {
             )}
 
             <div className="form-group">
-              <label>이메일 주소 (아이디)</label>
+              <label>로그인 아이디</label>
               <input
-                type="email"
-                placeholder="example@gowith153.com"
+                type="text"
+                placeholder="데이비"
                 value={emailInput}
                 onChange={(e) => setEmailInput(e.target.value)}
                 required

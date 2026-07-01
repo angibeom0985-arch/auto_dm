@@ -82,13 +82,13 @@ app.post("/api/auth/register", async (req: Request, res: Response) => {
   try {
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
-      res.status(400).json({ error: "Email already registered." });
+      res.status(400).json({ error: "이미 가입되어 사용 중인 아이디입니다." });
       return;
     }
 
     // Set first registered user as ADMIN for ease of demo, others as USER
     const userCount = await prisma.user.count();
-    const role = userCount === 0 || email === "davey@gowith153.com" ? "ADMIN" : "USER";
+    const role = userCount === 0 || email === "데이비" ? "ADMIN" : "USER";
 
     const passwordHash = hashPassword(password);
     const newUser = await prisma.user.create({
@@ -284,12 +284,12 @@ async function seedInitialData() {
   try {
     // Seed default admin user
     let adminUser = await prisma.user.findUnique({
-      where: { email: "davey@gowith153.com" }
+      where: { email: "데이비" }
     });
     if (!adminUser) {
       adminUser = await prisma.user.create({
         data: {
-          email: "davey@gowith153.com",
+          email: "데이비",
           passwordHash: hashPassword("7890uiop!"),
           name: "데이비",
           role: "ADMIN",
