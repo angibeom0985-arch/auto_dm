@@ -23,6 +23,8 @@ import {
   User,
   ExternalLink,
   Sliders,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 // Mock Instagram Feed & Reels List for Selector Modal
@@ -163,6 +165,7 @@ function App() {
   });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isPostSelectorOpen, setIsPostSelectorOpen] = useState<boolean>(false);
+  const [showPassword, setShowPassword] = useState<boolean>(false);
 
   // Simulator Input State
   const [simulatorUser, setSimulatorUser] = useState<string>("@creator_life");
@@ -924,19 +927,51 @@ function App() {
                 placeholder="데이비"
                 value={emailInput}
                 onChange={(e) => setEmailInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleAuthSubmit(e);
+                  }
+                }}
                 required
               />
             </div>
 
-            <div className="form-group">
+            <div className="form-group" style={{ position: "relative" }}>
               <label>비밀번호</label>
-              <input
-                type="password"
-                placeholder="••••••••"
-                value={passwordInput}
-                onChange={(e) => setPasswordInput(e.target.value)}
-                required
-              />
+              <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  value={passwordInput}
+                  onChange={(e) => setPasswordInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleAuthSubmit(e);
+                    }
+                  }}
+                  required
+                  style={{ width: "100%", paddingRight: "40px" }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{
+                    position: "absolute",
+                    right: "12px",
+                    background: "transparent",
+                    border: "none",
+                    color: "var(--text-secondary)",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: 0
+                  }}
+                  aria-label={showPassword ? "비밀번호 숨기기" : "비밀번호 보기"}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
 
             {authError && (
@@ -1089,6 +1124,51 @@ function App() {
         {/* Tab View: Dashboard */}
         {activeTab === "dashboard" && (
           <>
+            {/* 🌟 Premium Hero Banner Board (Inspired by DOT Template) */}
+            <div
+              className="animate-pulse-subtle"
+              style={{
+                position: "relative",
+                overflow: "hidden",
+                borderRadius: "24px",
+                background: "linear-gradient(135deg, #10b981 0%, #1d4ed8 100%)",
+                padding: "35px",
+                color: "white",
+                marginBottom: "25px",
+                boxShadow: "0 15px 35px rgba(16, 185, 129, 0.15)",
+              }}
+            >
+              {/* Blur Spot Decorations */}
+              <div style={{ position: "absolute", right: 0, top: 0, height: "160px", width: "160px", borderRadius: "50%", background: "rgba(255, 255, 255, 0.08)", filter: "blur(40px)" }}></div>
+              <div style={{ position: "absolute", left: "-40px", bottom: "-40px", height: "200px", width: "200px", borderRadius: "50%", background: "rgba(16, 185, 129, 0.2)", filter: "blur(50px)" }}></div>
+              
+              <div style={{ position: "relative", zIndex: 2, maxWidth: "600px" }}>
+                <span
+                  style={{
+                    display: "inline-block",
+                    borderRadius: "9999px",
+                    background: "rgba(255, 255, 255, 0.15)",
+                    padding: "4px 12px",
+                    fontSize: "10px",
+                    fontWeight: "700",
+                    textTransform: "uppercase",
+                    letterSpacing: "1px",
+                    backdropFilter: "blur(5px)",
+                  }}
+                >
+                  🚀 100% Free Unlimited DM Automation
+                </span>
+                <h2 style={{ marginTop: "16px", fontSize: "28px", fontWeight: "900", lineHeight: "1.3", color: "white" }}>
+                  인스타 떡상의 치트키, <br />
+                  이제 DM Launch로 무료 자동화하세요!
+                </h2>
+                <p style={{ marginTop: "12px", fontSize: "13.5px", color: "rgba(255, 255, 255, 0.85)", lineHeight: "1.6" }}>
+                  게시물 개수, 발송 개수, 사용 기간 상관없이 평생 유료 전환 없이 100% 무료 무제한! 
+                  타사 유료 솔루션의 고정 비용을 완전히 절감하고, 릴스 댓글 유입 전환율을 300% 이상 폭발적으로 떡상시킬 준비를 완수해 보세요.
+                </p>
+              </div>
+            </div>
+
             {/* Metric Grid */}
             <section className="metric-grid" aria-label="핵심 지표">
               <Metric icon={<Send size={20} />} label="누적 발송량" value={stats.totalSent.toLocaleString()} trend="100% 실시간" />
