@@ -929,7 +929,7 @@ function App() {
                 onChange={(e) => setEmailInput(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
-                    handleAuthSubmit(e);
+                    handleAuthSubmit(e as unknown as React.FormEvent);
                   }
                 }}
                 required
@@ -946,7 +946,7 @@ function App() {
                   onChange={(e) => setPasswordInput(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
-                      handleAuthSubmit(e);
+                      handleAuthSubmit(e as unknown as React.FormEvent);
                     }
                   }}
                   required
@@ -980,7 +980,12 @@ function App() {
               </div>
             )}
 
-            <button type="submit" className="primary-button" style={{ height: "45px", fontSize: "14px", fontWeight: "700", width: "100%", justifyContent: "center", marginTop: "10px" }}>
+            <button 
+              type="submit" 
+              className="primary-button" 
+              onClick={handleAuthSubmit}
+              style={{ height: "45px", fontSize: "14px", fontWeight: "700", width: "100%", justifyContent: "center", marginTop: "10px" }}
+            >
               {authMode === "login" ? "로그인하기" : "가입하기"}
             </button>
           </form>
