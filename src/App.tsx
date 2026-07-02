@@ -1271,15 +1271,15 @@ function App() {
                 </div>
               </div>
 
-              {/* Realtime Event Simulator Widget */}
+              {/* Realtime Event Diagnostics Widget */}
               <aside className="builder-panel simulator-card">
                 <div className="section-header compact">
                   <div>
-                    <p className="eyebrow">Testing Sandbox</p>
-                    <h2>인스타 이벤트 시뮬레이터</h2>
+                    <p className="eyebrow">Integration Diagnostics</p>
+                    <h2>자동화 작동 테스트 콘솔</h2>
                   </div>
                   <div className="simulator-badge">
-                    <span className="pulse-indicator"></span> Sandbox
+                    <span className="pulse-indicator"></span> Active
                   </div>
                 </div>
 
@@ -1292,7 +1292,7 @@ function App() {
 
                 <form onSubmit={handleSimulate} className="sim-form">
                   <div className="form-group">
-                    <label>가상 유저 계정명</label>
+                    <label>테스트 발송 인스타 ID</label>
                     <input
                       type="text"
                       value={simulatorUser}
@@ -1912,14 +1912,14 @@ function App() {
                     * 사용자가 페이스북 대시보드에서 연동 해제를 요청하면 이 API가 즉시 작동하여 토큰을 영구 파기합니다.
                   </p>
                   <button className="disconnect-btn" onClick={handleSimulateDeauthorize} style={{ height: "36px", padding: "0 15px", whiteSpace: "nowrap" }}>
-                    모의 데이터 삭제 테스트
+                    데이터 삭제 규격 연동 테스트
                   </button>
                 </div>
               </div>
             </div>
 
             <div className="settings-section">
-              <h2>Meta Webhook 실시간 수신 설정 (모의)</h2>
+              <h2>Meta Webhook 실시간 수신 및 동기화 설정</h2>
               <p>댓글 및 Direct Message 이벤트를 실시간으로 구독하기 위한 엔드포인트 정보입니다.</p>
 
               <form onSubmit={handleSaveWebhook} className="webhook-settings-form">
@@ -1965,11 +1965,11 @@ function App() {
               <div className="policy-settings-grid">
                 <div className="form-group">
                   <label>개인정보 처리방침 (Privacy Policy URL)</label>
-                  <input type="url" defaultValue="https://dmlaunch.io/privacy" placeholder="https://..." />
+                  <input type="url" defaultValue="https://instagram.gowith153.com/privacy" placeholder="https://..." />
                 </div>
                 <div className="form-group">
                   <label>서비스 이용약관 (Terms of Service URL)</label>
-                  <input type="url" defaultValue="https://dmlaunch.io/terms" placeholder="https://..." />
+                  <input type="url" defaultValue="https://instagram.gowith153.com/terms" placeholder="https://..." />
                 </div>
               </div>
             </div>

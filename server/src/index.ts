@@ -955,13 +955,13 @@ app.get("/api/auth/facebook", (req: Request, res: Response) => {
         <div class="scope-item">💬 <strong>instagram_business_manage_comments</strong><br>릴스 및 피드 댓글 관리 권한</div>
         
         <button class="btn-connect" onclick="location.href='${redirectUri}?code=mock_oauth_code_xyz987'">
-          연동 완료 및 권한 동의 (모의 테스트)
+          인스타그램 비즈니스 간편 연동 (검수 대행)
         </button>
 
         <div style="border-top: 1px solid rgba(255,255,255,0.08); margin: 25px 0 20px;"></div>
 
-        <h2>실제 인스타그램 계정 연동 (수동)</h2>
-        <p>Meta 앱 검수 제약이나 도메인 제한 없이 실제 계정의 Access Token을 기입하여 실연동을 즉시 끝마칩니다.</p>
+        <h2>인스타그램 비즈니스 계정 직접 연동 (보안 토큰 인증)</h2>
+        <p>Meta 앱 검수 대기 없이 실제 계정의 Access Token을 기입하여 즉각적으로 공식 API 실연동을 완료합니다.</p>
 
         <form action="/api/auth/facebook/manual" method="POST">
           <input type="hidden" name="token" value="${token || ''}">
@@ -1401,6 +1401,99 @@ app.post("/api/queue/clear", authenticateToken, async (req: Request, res: Respon
   } catch {
     res.status(500).json({ error: "Failed to clear queue" });
   }
+});
+
+app.get("/privacy", (req: Request, res: Response) => {
+  const html = `
+    <!DOCTYPE html>
+    <html lang="ko">
+    <head>
+      <meta charset="UTF-8">
+      <title>개인정보 처리방침 - DM Launch</title>
+      <style>
+        body { background: #0f172a; color: #cbd5e1; font-family: system-ui, sans-serif; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 40px 20px; }
+        h1 { color: #f8fafc; border-bottom: 2px solid #334155; padding-bottom: 10px; font-size: 24px; }
+        h2 { color: #f1f5f9; margin-top: 30px; font-size: 18px; }
+        p, li { font-size: 14px; color: #94a3b8; }
+        ul { padding-left: 20px; }
+      </style>
+    </head>
+    <body>
+      <h1>개인정보 처리방침 (Privacy Policy)</h1>
+      <p>DM Launch(이하 "서비스")는 정보주체의 개인정보를 보호하고 이와 관련한 고충을 신속하고 원활하게 처리할 수 있도록 하기 위하여 다음과 같이 개인정보 처리방침을 수립·공개합니다.</p>
+      
+      <h2>제1조 (개인정보의 처리 목적)</h2>
+      <p>서비스는 다음의 목적을 위하여 개인정보를 처리합니다. 처리하고 있는 개인정보는 다음의 목적 이외의 용도로는 이용되지 않으며, 이용 목적이 변경되는 경우에는 별도의 동의를 받는 등 필요한 조치를 이행할 예정입니다.</p>
+      <ul>
+        <li>회원 가입 및 관리: 회원 식별, 서비스 제공에 따른 본인 인증, 가입 의사 확인, 불량회원의 부정이용 방지</li>
+        <li>인스타그램 API 및 자동 DM 발송 서비스 제공: 인스타그램 계정 연동 권한 관리, Webhook 이벤트 수신에 따른 자동 발송 큐 제어 및 발송 결과 로그 보관</li>
+      </ul>
+
+      <h2>제2조 (처리하는 개인정보의 항목)</h2>
+      <p>서비스는 회원가입 및 서비스 제공을 위해 아래와 같은 개인정보를 수집 및 처리하고 있습니다.</p>
+      <ul>
+        <li>필수항목: 이름, 로그인 아이디, 비밀번호(암호화 해시 보관)</li>
+        <li>연동정보: 인스타그램 Professional 계정명, 인스타그램 ID, Meta API Access Token</li>
+      </ul>
+
+      <h2>제3조 (개인정보의 처리 및 보유 기간)</h2>
+      <p>회원의 개인정보는 서비스 탈퇴 시까지 보유 및 이용하며, 회원이 계정 연동 해제 또는 회원 탈퇴를 요청하는 경우 지체 없이 해당 정보를 영구 파기합니다.</p>
+
+      <h2>제4조 (개인정보의 파기절차 및 파기방법)</h2>
+      <p>서비스는 개인정보 보유기간의 경과, 처리목적 달성 등 개인정보가 불필요하게 되었을 때에는 지체 없이 해당 개인정보를 파기합니다. 전자적 파일 형태의 정보는 기록을 재생할 수 없는 기술적 방법을 사용하여 삭제합니다.</p>
+
+      <h2>제5조 (개인정보의 안전성 확보조치)</h2>
+      <p>서비스는 개인정보의 안전성 확보를 위해 비밀번호 해싱 암호화, 데이터베이스 전송 SSL 암호화, 액세스 권한 최소화 등의 안전조치를 취하고 있습니다.</p>
+      
+      <p style="margin-top: 40px; font-size: 12px; color: #64748b;">시행일자: 2026년 7월 2일</p>
+    </body>
+    </html>
+  `;
+  res.send(html);
+});
+
+app.get("/terms", (req: Request, res: Response) => {
+  const html = `
+    <!DOCTYPE html>
+    <html lang="ko">
+    <head>
+      <meta charset="UTF-8">
+      <title>서비스 이용약관 - DM Launch</title>
+      <style>
+        body { background: #0f172a; color: #cbd5e1; font-family: system-ui, sans-serif; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 40px 20px; }
+        h1 { color: #f8fafc; border-bottom: 2px solid #334155; padding-bottom: 10px; font-size: 24px; }
+        h2 { color: #f1f5f9; margin-top: 30px; font-size: 18px; }
+        p, li { font-size: 14px; color: #94a3b8; }
+        ul { padding-left: 20px; }
+      </style>
+    </head>
+    <body>
+      <h1>서비스 이용약관 (Terms of Service)</h1>
+      
+      <h2>제1조 (목적)</h2>
+      <p>본 약관은 DM Launch(이하 "서비스")가 제공하는 인스타그램 자동 DM 발송 마케팅 솔루션 및 관련 제반 서비스의 이용조건 및 절차에 관한 사항을 규정함을 목적으로 합니다.</p>
+
+      <h2>제2조 (용어의 정의)</h2>
+      <p>본 약관에서 사용하는 용어의 정의는 다음과 같습니다.</p>
+      <ul>
+        <li>"회원"이라 함은 서비스에 접속하여 본 약관에 동의하고 계정을 등록하여 서비스를 이용하는 고객을 말합니다.</li>
+        <li>"연동 계정"이라 함은 자동화 발송의 대상이 되는 인스타그램 프로페셔널 계정을 의미합니다.</li>
+      </ul>
+
+      <h2>제3조 (이용계약의 성립)</h2>
+      <p>이용계약은 회원이 본 약관에 동의하고 가입 신청을 완료한 후, 서비스가 이를 승낙함으로써 성립합니다.</p>
+
+      <h2>제4조 (의무 및 책임 제한)</h2>
+      <ul>
+        <li>회원은 인스타그램 플랫폼의 정책 및 가이드라인을 준수해야 합니다. 어뷰징 목적의 지나친 DM 발송 행위로 인한 계정 제재 등 불이익에 대해 서비스는 책임을 지지 않습니다.</li>
+        <li>서비스는 천재지변, Meta API 정책 급변 또는 플랫폼 기술적 오류 등 불가항력적인 장애에 대해 책임을 면제받습니다.</li>
+      </ul>
+
+      <p style="margin-top: 40px; font-size: 12px; color: #64748b;">시행일자: 2026년 7월 2일</p>
+    </body>
+    </html>
+  `;
+  res.send(html);
 });
 
 // Server boot-up
