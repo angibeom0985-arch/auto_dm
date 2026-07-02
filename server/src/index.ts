@@ -537,7 +537,7 @@ app.get("/api/automations", authenticateToken, async (req: Request, res: Respons
 
 app.post("/api/automations", authenticateToken, async (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
-  const { name, triggerType, trigger, message, status, targetPostId } = req.body;
+  const { name, triggerType, trigger, message, status, targetPostId, buttonText, buttonUrl } = req.body;
   if (!name || !triggerType || !trigger || !message) {
     res.status(400).json({ error: "Missing required fields" });
     return;
@@ -551,7 +551,11 @@ app.post("/api/automations", authenticateToken, async (req: Request, res: Respon
         message,
         status: status || "운영중",
         targetPostId: targetPostId || null,
+        buttonText: buttonText || null,
+        buttonUrl: buttonUrl || null,
         sent: 0,
+        readCount: 0,
+        clickCount: 0,
         conversion: "0.0%",
         userId: authReq.user!.userId,
       },
@@ -565,7 +569,7 @@ app.post("/api/automations", authenticateToken, async (req: Request, res: Respon
 app.put("/api/automations/:id", authenticateToken, async (req: Request, res: Response) => {
   const authReq = req as AuthRequest;
   const { id } = req.params;
-  const { name, triggerType, trigger, message, status, sent, targetPostId } = req.body;
+  const { name, triggerType, trigger, message, status, sent, targetPostId, buttonText, buttonUrl, readCount, clickCount } = req.body;
   try {
     const updated = await prisma.automation.update({
       where: { id, userId: authReq.user!.userId },
@@ -576,12 +580,52 @@ app.put("/api/automations/:id", authenticateToken, async (req: Request, res: Res
         message,
         status,
         sent,
+        readCount,
+        clickCount,
         targetPostId: targetPostId !== undefined ? targetPostId : undefined,
+        buttonText: buttonText !== undefined ? buttonText : undefined,
+        buttonUrl: buttonUrl !== undefined ? buttonUrl : undefined,
       },
     });
     res.json(updated);
   } catch {
     res.status(500).json({ error: "Failed to update automation" });
+  }
+});
+
+// Realtime URL click tracking endpoint for conversion rate metrics
+app.get("/api/click/:automationId", async (req: Request, res: Response) => {
+  const { automationId } = req.params;
+  try {
+    const automation = await prisma.automation.findUnique({
+      where: { id: automationId }
+    });
+    if (!automation) {
+      res.status(404).send("Automation not found");
+      return;
+    }
+    
+    // Increment click count and adjust conversion rate
+    const updated = await prisma.automation.update({
+      where: { id: automationId },
+      data: { 
+        clickCount: { increment: 1 } 
+      }
+    });
+
+    const sent = updated.sent || 1;
+    const clicks = updated.clickCount || 0;
+    const rate = ((clicks / sent) * 100).toFixed(1);
+
+    await prisma.automation.update({
+      where: { id: automationId },
+      data: { conversion: `${rate}%` }
+    });
+
+    const targetUrl = automation.buttonUrl || "https://instagram.gowith153.com";
+    res.redirect(targetUrl);
+  } catch {
+    res.redirect("https://instagram.gowith153.com");
   }
 });
 

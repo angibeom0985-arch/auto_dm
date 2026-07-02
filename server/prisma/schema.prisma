@@ -44,7 +44,11 @@ model Automation {
   message      String
   status       String      @default("운영중") // "운영중" | "점검"
   targetPostId String?
+  buttonText   String?
+  buttonUrl    String?
   sent         Int         @default(0)
+  readCount    Int         @default(0)
+  clickCount   Int         @default(0)
   conversion   String      @default("0%")
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt

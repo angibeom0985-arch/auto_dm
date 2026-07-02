@@ -5,9 +5,7 @@ import {
   BarChart3,
   Bell,
   Camera,
-  CalendarClock,
   CheckCircle2,
-  CircleDollarSign,
   Cog,
   FileText,
   KeyRound,
@@ -27,6 +25,16 @@ import {
   Sliders,
 } from "lucide-react";
 
+// Mock Instagram Feed & Reels List for Selector Modal
+const MOCK_INSTAGRAM_POSTS = [
+  { id: "media_post_101", title: "🔥 [선착순 이벤트] 인스타 3개월만에 1만 팔로워 달성법 가이드북 무료배포!", type: "Reels", date: "2026-06-30", thumbnail: "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=150&auto=format&fit=crop&q=60" },
+  { id: "media_post_102", title: "🎁 [댓글 이벤트] 디자이너 없이 10분 만에 카드뉴스 만드는 무료 템플릿 50종", type: "Post", date: "2026-06-28", thumbnail: "https://images.unsplash.com/photo-1563986768609-322da13575f3?w=150&auto=format&fit=crop&q=60" },
+  { id: "media_post_103", title: "📈 [릴스 무료특강] 조회수 100만 뚫는 릴스 기획 & 편집 마스터 비결 가이드", type: "Reels", date: "2026-06-25", thumbnail: "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=150&auto=format&fit=crop&q=60" },
+  { id: "media_post_104", title: "💡 블로그 1일 1포스팅 템플릿 & 주제 선정 가이드 무료 나눔 (댓글 신청)", type: "Post", date: "2026-06-22", thumbnail: "https://images.unsplash.com/photo-1499750310107-5fef28a66643?w=150&auto=format&fit=crop&q=60" },
+  { id: "media_post_105", title: "🧠 챗GPT 프롬프트 100가지 PDF 전자책 무료 공유 이벤트 - 7일 한정", type: "Reels", date: "2026-06-19", thumbnail: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=150&auto=format&fit=crop&q=60" },
+  { id: "media_post_106", title: "🚀 노션 포트폴리오 템플릿 & 취업 보증서 가이드라인 배포 (댓글로 신청하기)", type: "Post", date: "2026-06-15", thumbnail: "https://images.unsplash.com/photo-1531403009284-440f080d1e12?w=150&auto=format&fit=crop&q=60" },
+];
+
 // Interfaces
 interface Automation {
   id: string;
@@ -36,7 +44,11 @@ interface Automation {
   message: string;
   status: "운영중" | "예약" | "점검";
   targetPostId: string | null;
+  buttonText: string | null;
+  buttonUrl: string | null;
   sent: number;
+  readCount: number;
+  clickCount: number;
   conversion: string;
 }
 
@@ -135,15 +147,18 @@ function App() {
   const [notificationUrlInput, setNotificationUrlInput] = useState<string>("");
 
   // Builder Input State
-  const [newAuto, setNewAuto] = useState<Omit<Automation, "id" | "sent" | "conversion">>({
+  const [newAuto, setNewAuto] = useState<Omit<Automation, "id" | "sent" | "conversion" | "readCount" | "clickCount">>({
     name: "",
     triggerType: "comment",
     trigger: "",
     message: "",
     status: "운영중",
     targetPostId: "",
+    buttonText: "",
+    buttonUrl: "",
   });
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isPostSelectorOpen, setIsPostSelectorOpen] = useState<boolean>(false);
 
   // Simulator Input State
   const [simulatorUser, setSimulatorUser] = useState<string>("@creator_life");
@@ -433,16 +448,22 @@ function App() {
   // Recalculate stats based on fetched data
   const stats = useMemo(() => {
     const totalSent = automations.reduce((sum, item) => sum + item.sent, 0);
+    const totalClicks = automations.reduce((sum, item) => sum + (item.clickCount || 0), 0);
+    const totalReads = automations.reduce((sum, item) => sum + (item.readCount || 0), 0);
+    const conversionRate = totalSent > 0 ? ((totalClicks / totalSent) * 100).toFixed(1) : "0.0";
+    const openedRate = totalSent > 0 ? ((totalReads / totalSent) * 100).toFixed(1) : "0.0";
+
     const converted = leads.filter((l) => l.status === "전환완료").length;
     const pending = queue.filter((q) => q.status === "PENDING" || q.status === "PROCESSING").length;
-    const responseCount = leads.filter((l) => l.messagesCount > 1).length;
-    const rate = leads.length > 0 ? (responseCount / leads.length) * 100 : 0;
 
     return {
-      sentToday: totalSent,
+      totalSent,
+      totalClicks,
+      totalReads,
+      conversionRate,
+      openedRate,
       convertedLeads: converted,
       pendingCount: pending,
-      responseRate: parseFloat(rate.toFixed(1)),
     };
   }, [automations, leads, queue]);
 
@@ -542,6 +563,8 @@ function App() {
           message: "",
           status: "운영중",
           targetPostId: "",
+          buttonText: "",
+          buttonUrl: "",
         });
       }
     } catch (err) {
@@ -558,6 +581,8 @@ function App() {
       message: auto.message,
       status: auto.status,
       targetPostId: auto.targetPostId || "",
+      buttonText: auto.buttonText || "",
+      buttonUrl: auto.buttonUrl || "",
     });
   };
 
@@ -572,7 +597,7 @@ function App() {
           fetchAutomations();
           if (editingId === id) {
             setEditingId(null);
-            setNewAuto({ name: "", triggerType: "comment", trigger: "", message: "", status: "운영중", targetPostId: "" });
+            setNewAuto({ name: "", triggerType: "comment", trigger: "", message: "", status: "운영중", targetPostId: "", buttonText: "", buttonUrl: "" });
           }
         }
       } catch (err) {
@@ -1047,7 +1072,7 @@ function App() {
               onClick={() => {
                 setActiveTab("automations");
                 setEditingId(null);
-                setNewAuto({ name: "", triggerType: "comment", trigger: "", message: "", status: "운영중", targetPostId: "" });
+                setNewAuto({ name: "", triggerType: "comment", trigger: "", message: "", status: "운영중", targetPostId: "", buttonText: "", buttonUrl: "" });
               }}
             >
               <Plus size={18} /> 새 자동화 추가
@@ -1062,10 +1087,10 @@ function App() {
           <>
             {/* Metric Grid */}
             <section className="metric-grid" aria-label="핵심 지표">
-              <Metric icon={<Send size={20} />} label="오늘 발송" value={stats.sentToday.toLocaleString()} trend="+12.8% 실시간" />
-              <Metric icon={<MousePointerClick size={20} />} label="응답률" value={`${stats.responseRate}%`} trend="+4.2% 이번주" />
-              <Metric icon={<CalendarClock size={20} />} label="예약 대기" value={String(stats.pendingCount)} trend="3개 플로우" />
-              <Metric icon={<CircleDollarSign size={20} />} label="전환 리드" value={String(stats.convertedLeads)} trend="₩4.8M 예상" />
+              <Metric icon={<Send size={20} />} label="누적 발송량" value={stats.totalSent.toLocaleString()} trend="100% 실시간" />
+              <Metric icon={<MessageSquareText size={20} />} label="메시지 조회수" value={stats.totalReads.toLocaleString()} trend={`${stats.openedRate}% 개봉률`} />
+              <Metric icon={<MousePointerClick size={20} />} label="링크 클릭수" value={stats.totalClicks.toLocaleString()} trend="누적 클릭" />
+              <Metric icon={<Activity size={20} />} label="평균 전환율" value={`${stats.conversionRate}%`} trend="클릭 전환 기준" />
             </section>
 
             {/* Neon SVG Analytics Chart Area (고도화 4단계) */}
@@ -1561,14 +1586,33 @@ function App() {
 
                 {newAuto.triggerType === "comment" && (
                   <div className="form-group animate-fade-in">
-                    <label>특정 릴스/게시물 ID (선택)</label>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                      <label style={{ marginBottom: 0 }}>특정 릴스/게시물 ID (선택)</label>
+                      <button
+                        type="button"
+                        onClick={() => setIsPostSelectorOpen(true)}
+                        style={{
+                          fontSize: "11px",
+                          background: "rgba(16, 185, 129, 0.1)",
+                          border: "1px solid var(--accent-emerald)",
+                          color: "var(--accent-emerald)",
+                          borderRadius: "4px",
+                          padding: "2px 8px",
+                          cursor: "pointer",
+                          fontWeight: "600",
+                          transition: "all 0.2s"
+                        }}
+                      >
+                        내 피드 불러오기
+                      </button>
+                    </div>
                     <input
                       type="text"
                       value={newAuto.targetPostId || ""}
                       onChange={(e) => setNewAuto({ ...newAuto, targetPostId: e.target.value })}
-                      placeholder="예: media_campaign_a (비워두면 전체 게시물 반응)"
+                      placeholder="예: media_post_101 (비워두면 전체 게시물 반응)"
                     />
-                    <small className="help-text">특정 릴스 댓글에만 반응시키려면 인스타 미디어 ID를 입력하세요.</small>
+                    <small className="help-text">특정 릴스 댓글에만 반응시키려면 인스타 미디어 ID를 선택/입력하세요.</small>
                   </div>
                 )}
 
@@ -1596,6 +1640,37 @@ function App() {
                   <small className="help-text">24시간 메시징 윈도우 규칙과 템플릿 가이드라인을 준수해주세요.</small>
                 </div>
 
+                <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid var(--border-color)", borderRadius: "12px", padding: "16px", marginBottom: "20px" }}>
+                  <span style={{ fontSize: "12px", fontWeight: "700", color: "var(--accent-emerald)", display: "block", marginBottom: "10px" }}>
+                    🔗 첨부할 링크 버튼 설정 (선택사항)
+                  </span>
+                  <div style={{ display: "flex", gap: "10px" }}>
+                    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "4px" }}>
+                      <label style={{ fontSize: "11px", color: "var(--text-secondary)" }}>버튼 이름</label>
+                      <input
+                        type="text"
+                        value={newAuto.buttonText || ""}
+                        onChange={(e) => setNewAuto({ ...newAuto, buttonText: e.target.value })}
+                        placeholder="예: 가이드북 무료 다운로드 📥"
+                        style={{ height: "38px", fontSize: "12px", background: "var(--bg-dark)", border: "1px solid var(--border-color)", borderRadius: "6px", color: "white", padding: "0 10px" }}
+                      />
+                    </div>
+                    <div style={{ flex: 2, display: "flex", flexDirection: "column", gap: "4px" }}>
+                      <label style={{ fontSize: "11px", color: "var(--text-secondary)" }}>이동할 링크 URL</label>
+                      <input
+                        type="url"
+                        value={newAuto.buttonUrl || ""}
+                        onChange={(e) => setNewAuto({ ...newAuto, buttonUrl: e.target.value })}
+                        placeholder="예: https://instagram.gowith153.com/privacy"
+                        style={{ height: "38px", fontSize: "12px", background: "var(--bg-dark)", border: "1px solid var(--border-color)", borderRadius: "6px", color: "white", padding: "0 10px" }}
+                      />
+                    </div>
+                  </div>
+                  <small style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "8px", display: "block", lineHeight: "1.4" }}>
+                    * 버튼 정보 기입 시 Instagram Generic Template 형태로 발송되어 유입 성과를 실시간 트래킹할 수 있습니다.
+                  </small>
+                </div>
+
                 <div className="form-group">
                   <label>기본 상태 설정</label>
                   <div className="status-selector-row">
@@ -1619,7 +1694,7 @@ function App() {
                       className="builder-cancel-btn"
                       onClick={() => {
                         setEditingId(null);
-                        setNewAuto({ name: "", triggerType: "comment", trigger: "", message: "", status: "운영중", targetPostId: "" });
+                        setNewAuto({ name: "", triggerType: "comment", trigger: "", message: "", status: "운영중", targetPostId: "", buttonText: "", buttonUrl: "" });
                       }}
                     >
                       취소
@@ -2121,6 +2196,130 @@ function App() {
           </section>
         )}
       </section>
+
+      {/* 🎬 Instagram Feed & Reels Post Selector Modal (Premium UI) */}
+      {isPostSelectorOpen && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0, 0, 0, 0.8)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            backdropFilter: "blur(8px)",
+          }}
+          onClick={() => setIsPostSelectorOpen(false)}
+        >
+          <div
+            style={{
+              background: "#1e1e1e",
+              border: "1px solid var(--border-color)",
+              borderRadius: "16px",
+              width: "100%",
+              maxWidth: "680px",
+              padding: "25px",
+              boxShadow: "0 20px 50px rgba(0,0,0,0.6)",
+              boxSizing: "border-box",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", borderBottom: "1px solid rgba(255,255,255,0.06)", paddingBottom: "12px" }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: "16px", fontWeight: "700", color: "white" }}>내 인스타그램 피드/릴스 목록</h3>
+                <p style={{ margin: "4px 0 0", fontSize: "11px", color: "var(--text-secondary)" }}>자동화를 적용할 인스타그램 미디어를 선택하세요.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPostSelectorOpen(false)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#a1a1aa",
+                  fontSize: "18px",
+                  cursor: "pointer",
+                  fontWeight: "bold"
+                }}
+              >
+                &times;
+              </button>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "15px", maxHeight: "400px", overflowY: "auto", paddingRight: "5px" }}>
+              {MOCK_INSTAGRAM_POSTS.map((post) => (
+                <div
+                  key={post.id}
+                  onClick={() => {
+                    setNewAuto({ ...newAuto, targetPostId: post.id });
+                    setIsPostSelectorOpen(false);
+                  }}
+                  style={{
+                    background: "rgba(255,255,255,0.02)",
+                    border: "1px solid rgba(255,255,255,0.05)",
+                    borderRadius: "10px",
+                    padding: "10px",
+                    cursor: "pointer",
+                    display: "flex",
+                    gap: "12px",
+                    transition: "all 0.2s",
+                    alignItems: "center"
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.border = "1px solid var(--accent-emerald)";
+                    e.currentTarget.style.background = "rgba(16, 185, 129, 0.03)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.border = "1px solid rgba(255,255,255,0.05)";
+                    e.currentTarget.style.background = "rgba(255,255,255,0.02)";
+                  }}
+                >
+                  <img
+                    src={post.thumbnail}
+                    alt="thumbnail"
+                    style={{ width: "64px", height: "64px", borderRadius: "6px", objectFit: "cover" }}
+                  />
+                  <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "4px" }}>
+                    <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                      <span
+                        style={{
+                          fontSize: "9px",
+                          fontWeight: "800",
+                          background: post.type === "Reels" ? "linear-gradient(45deg, #f9ce34, #ee2a7b, #6228d7)" : "rgba(255,255,255,0.08)",
+                          color: "white",
+                          padding: "2px 6px",
+                          borderRadius: "4px",
+                        }}
+                      >
+                        {post.type}
+                      </span>
+                      <span style={{ fontSize: "10px", color: "var(--text-muted)" }}>{post.date}</span>
+                    </div>
+                    <strong style={{ fontSize: "12px", color: "white", lineHeight: "1.4", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                      {post.title}
+                    </strong>
+                    <small style={{ fontSize: "10px", color: "var(--text-muted)", fontFamily: "monospace" }}>ID: {post.id}</small>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginTop: "20px", display: "flex", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => setIsPostSelectorOpen(false)}
+                style={{ padding: "8px 16px", fontSize: "12px" }}
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

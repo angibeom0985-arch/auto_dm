@@ -233,23 +233,38 @@ async function processQueue() {
           }
         }
 
+        const appUrl = process.env.APP_URL || "https://instagram.gowith153.com";
+        const trackingUrl = automation.buttonUrl 
+          ? `${appUrl}/api/click/${automation.id}`
+          : null;
+
         let sendResult;
 
         if (automation.triggerType === "comment") {
           sendResult = await sendPrivateReply(
             item.recipientId,
             item.body,
-            account.accessToken
+            account.accessToken,
+            automation.buttonText,
+            trackingUrl
           );
         } else {
           sendResult = await sendDirectMessage(
             item.recipientId,
             item.body,
-            account.accessToken
+            account.accessToken,
+            automation.buttonText,
+            trackingUrl
           );
         }
 
         if (sendResult.success) {
+          // Increment sent count of automation
+          await prisma.automation.update({
+            where: { id: automation.id },
+            data: { sent: { increment: 1 } }
+          });
+
           await prisma.queueItem.update({
             where: { id: item.id },
             data: { status: "COMPLETED" },
