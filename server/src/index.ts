@@ -238,7 +238,7 @@ function getCurrentTime(): string {
 
 // HMAC SHA256 Verification Middleware
 const verifyMetaSignature = (
-  req: AuthenticatedRequest,
+  req: AuthRequest,
   res: Response,
   next: NextFunction
 ): void => {
