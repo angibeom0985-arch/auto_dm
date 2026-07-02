@@ -1496,6 +1496,50 @@ app.get("/terms", (req: Request, res: Response) => {
   res.send(html);
 });
 
+app.get("/deletion", (req: Request, res: Response) => {
+  const html = `
+    <!DOCTYPE html>
+    <html lang="ko">
+    <head>
+      <meta charset="UTF-8">
+      <title>데이터 삭제 지침 - DM Launch</title>
+      <style>
+        body { background: #0f172a; color: #cbd5e1; font-family: system-ui, sans-serif; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 40px 20px; }
+        h1 { color: #f8fafc; border-bottom: 2px solid #334155; padding-bottom: 10px; font-size: 24px; }
+        h2 { color: #f1f5f9; margin-top: 30px; font-size: 18px; }
+        p, li { font-size: 14px; color: #94a3b8; }
+        ol { padding-left: 20px; }
+        .contact { background: #1e293b; padding: 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); margin-top: 25px; }
+      </style>
+    </head>
+    <body>
+      <h1>데이터 삭제 요청 지침 (Data Deletion Instructions)</h1>
+      <p>DM Launch 서비스는 Meta 플랫폼 정책을 전적으로 준수하며, 사용자의 인스타그램 연동 데이터 및 개인정보의 자기결정권을 보장합니다. 당사 서비스를 이용하며 연동된 데이터 및 가입된 계정 정보를 삭제하고자 하는 경우 아래 지침에 따라 주시기 바랍니다.</p>
+      
+      <h2>방법 1: Facebook 설정에서 자동 연동 해제 및 즉각 삭제</h2>
+      <p>페이스북 계정 설정을 통해 본 서비스에 부여된 API 권한을 회수하고 서버에 저장된 데이터를 영구 파기할 수 있습니다.</p>
+      <ol>
+        <li>연동된 Facebook 프로필의 <strong>[설정 및 개인정보]</strong>로 이동합니다.</li>
+        <li>설정 메뉴 내 <strong>[앱 및 웹사이트]</strong> 탭을 클릭합니다.</li>
+        <li>목록에서 <strong>[DM Launch]</strong> 서비스를 찾아 선택한 후 <strong>[삭제 (Remove)]</strong> 버튼을 클릭합니다.</li>
+        <li>권한 회수와 즉시 당사 백엔드 서버에 데이터 삭제 웹훅(Deauthorize Callback)이 수신되어, 회원님의 액세스 토큰이 완전히 영구 파기되며 수집된 리드 데이터가 마스킹 처리됩니다.</li>
+      </ol>
+
+      <h2>방법 2: 고객센터 이메일을 통한 수동 삭제 요청</h2>
+      <p>회원가입 계정 자체의 완전 파기 및 데이터 완전 소거를 원하시는 경우 아래 지원 창구를 통해 직접 삭제를 신청하실 수 있습니다.</p>
+      <div class="contact">
+        <p style="margin: 0; font-weight: bold; color: #f8fafc;">DM Launch 고객 지원팀</p>
+        <p style="margin: 5px 0 0; font-size: 13px;">📧 이메일: <a href="mailto:help@gowith153.com" style="color: #10b981;">help@gowith153.com</a></p>
+        <p style="margin: 5px 0 0; font-size: 13px;">* 신청 접수 즉시 24시간 내 모든 DB 레코드 및 개인 식별 정보가 영구 격리 후 삭제됩니다.</p>
+      </div>
+
+      <p style="margin-top: 40px; font-size: 12px; color: #64748b;">시행일자: 2026년 7월 2일</p>
+    </body>
+    </html>
+  `;
+  res.send(html);
+});
+
 // Server boot-up
 app.listen(PORT, () => {
   console.log(`🚀 API Server running on http://localhost:${PORT}`);

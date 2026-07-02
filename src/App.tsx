@@ -1904,7 +1904,7 @@ function App() {
                 <div>
                   <strong>Data Deletion Callback URL (데이터 삭제 지시 콜백)</strong>
                   <code style={{ display: "block", background: "rgba(0,0,0,0.2)", padding: "10px", borderRadius: "6px", fontSize: "12px", marginTop: "6px" }}>
-                    http://localhost:5000/api/auth/deauthorize
+                    https://instagram.gowith153.com/api/auth/deauthorize
                   </code>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "10px" }}>
@@ -1970,6 +1970,10 @@ function App() {
                 <div className="form-group">
                   <label>서비스 이용약관 (Terms of Service URL)</label>
                   <input type="url" defaultValue="https://instagram.gowith153.com/terms" placeholder="https://..." />
+                </div>
+                <div className="form-group">
+                  <label>데이터 삭제 요청 안내 (Data Deletion Instructions URL)</label>
+                  <input type="url" defaultValue="https://instagram.gowith153.com/deletion" placeholder="https://..." />
                 </div>
               </div>
             </div>
