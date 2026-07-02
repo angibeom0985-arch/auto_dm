@@ -857,7 +857,6 @@ app.post("/api/simulator", authenticateToken, async (req: Request, res: Response
 // 6. Meta OAuth Mock Flows
 app.get("/api/auth/facebook", (req: Request, res: Response) => {
   const token = req.query.token as string;
-  const redirectUri = `http://localhost:${PORT}/api/auth/facebook/callback?code=mock_code_abc&token=${token || ""}`;
   const html = `
     <!DOCTYPE html>
     <html lang="ko">
@@ -948,20 +947,14 @@ app.get("/api/auth/facebook", (req: Request, res: Response) => {
     <body>
       <div class="card">
         <div class="logo">facebook</div>
-        <h2>DM Launch 권한 동의</h2>
-        <p>인스타그램 자동 답장 및 DM 발송 기능을 활성화하기 위해 다음 권한을 연동합니다.</p>
+        <h2>인스타그램 비즈니스 계정 공식 연동</h2>
+        <p>서비스 활성화를 위해 Meta Developer API 권한 및 보안 액세스 토큰 정보를 등록합니다.</p>
         
-        <div class="scope-item">🔑 <strong>instagram_business_manage_messages</strong><br>Direct Message 읽기/쓰기 권한</div>
-        <div class="scope-item">💬 <strong>instagram_business_manage_comments</strong><br>릴스 및 피드 댓글 관리 권한</div>
-        
-        <button class="btn-connect" onclick="location.href='${redirectUri}?code=mock_oauth_code_xyz987'">
-          인스타그램 비즈니스 간편 연동 (검수 대행)
-        </button>
-
-        <div style="border-top: 1px solid rgba(255,255,255,0.08); margin: 25px 0 20px;"></div>
-
-        <h2>인스타그램 비즈니스 계정 직접 연동 (보안 토큰 인증)</h2>
-        <p>Meta 앱 검수 대기 없이 실제 계정의 Access Token을 기입하여 즉각적으로 공식 API 실연동을 완료합니다.</p>
+        <div class="scope-item" style="margin-bottom: 20px;">
+          🔑 <strong>필수 요구 권한:</strong><br>
+          - instagram_business_manage_messages (DM 제어)<br>
+          - instagram_business_manage_comments (댓글 감지)
+        </div>
 
         <form action="/api/auth/facebook/manual" method="POST">
           <input type="hidden" name="token" value="${token || ''}">
@@ -975,10 +968,10 @@ app.get("/api/auth/facebook", (req: Request, res: Response) => {
           </div>
           <div class="form-control">
             <label>Meta 액세스 토큰 (Access Token)</label>
-            <textarea name="accessToken" rows="3" placeholder="EAAG..." required></textarea>
+            <textarea name="accessToken" rows="4" placeholder="Meta Graph API에서 발급받은 EAAG... 로 시작하는 토큰 입력" required></textarea>
           </div>
-          <button type="submit" class="btn-connect" style="background: #10b981; color: #0f172a;">
-            실제 계정 연동 완료
+          <button type="submit" class="btn-connect" style="background: #10b981; color: #0f172a; margin-top: 20px;">
+            인스타그램 계정 연동 완료
           </button>
         </form>
       </div>
