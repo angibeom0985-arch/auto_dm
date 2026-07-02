@@ -106,11 +106,8 @@ interface AnalyticsItem {
   converted: number;
 }
 
-const API_BASE =
-  import.meta.env.VITE_API_URL ||
-  (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
-    ? "http://localhost:5000/api"
-    : `${window.location.protocol}//${window.location.host}/api`);
+const SITE_ORIGIN = "https://instagram.gowith153.com";
+const API_BASE = import.meta.env.VITE_API_URL || `${SITE_ORIGIN}/api`;
 
 function App() {
   // Tab State
@@ -144,7 +141,7 @@ function App() {
   const [metaLoading, setMetaLoading] = useState<boolean>(false);
   const [metaAccount, setMetaAccount] = useState<MetaAccount | null>(null);
 
-  const [webhookUrl, setWebhookUrl] = useState<string>("https://instagram.gowith153.com/webhook/instagram");
+  const [webhookUrl, setWebhookUrl] = useState<string>("https://instagram.gowith153.com/api/webhook/instagram");
   const [webhookToken, setWebhookToken] = useState<string>("dml_secret_verify_token_12345");
   const [webhookVerified, setWebhookVerified] = useState<boolean>(true);
 
@@ -304,11 +301,12 @@ function App() {
       });
       if (res.ok) {
         const data = await res.json();
-        setMetaConnected(data.connected);
-        setMetaAccount(data.account);
-        if (data.account) {
-          setDailyLimitInput(data.account.dailyLimit);
-          setNotificationUrlInput(data.account.notificationUrl || "");
+        const account = data?.account || null;
+        setMetaConnected(Boolean(data?.connected));
+        setMetaAccount(account);
+        if (account) {
+          setDailyLimitInput(account.dailyLimit);
+          setNotificationUrlInput(account.notificationUrl || "");
         }
       }
     } catch (err) {
@@ -692,7 +690,7 @@ function App() {
     const top = window.screen.height / 2 - height / 2;
 
     window.open(
-      `http://localhost:5000/api/auth/facebook?token=${token}`,
+      `${API_BASE}/auth/facebook?token=${token}`,
       "facebook-oauth-mock",
       `width=${width},height=${height},top=${top},left=${left},scrollbars=no,resizable=no`
     );
@@ -2133,7 +2131,7 @@ function App() {
                     type="text"
                     value={webhookUrl}
                     onChange={(e) => setWebhookUrl(e.target.value)}
-                    placeholder="https://yourdomain.com/webhook"
+                    placeholder="https://instagram.gowith153.com/api/webhook/instagram"
                     required
                   />
                 </div>
@@ -2169,15 +2167,15 @@ function App() {
               <div className="policy-settings-grid">
                 <div className="form-group">
                   <label>개인정보 처리방침 (Privacy Policy URL)</label>
-                  <input type="url" defaultValue="https://instagram.gowith153.com/privacy" placeholder="https://..." />
+                  <input type="url" defaultValue="https://instagram.gowith153.com/privacy" placeholder="https://instagram.gowith153.com/privacy" />
                 </div>
                 <div className="form-group">
                   <label>서비스 이용약관 (Terms of Service URL)</label>
-                  <input type="url" defaultValue="https://instagram.gowith153.com/terms" placeholder="https://..." />
+                  <input type="url" defaultValue="https://instagram.gowith153.com/terms" placeholder="https://instagram.gowith153.com/terms" />
                 </div>
                 <div className="form-group">
                   <label>데이터 삭제 요청 안내 (Data Deletion Instructions URL)</label>
-                  <input type="url" defaultValue="https://instagram.gowith153.com/deletion" placeholder="https://..." />
+                  <input type="url" defaultValue="https://instagram.gowith153.com/deletion" placeholder="https://instagram.gowith153.com/deletion" />
                 </div>
               </div>
             </div>

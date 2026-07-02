@@ -30,6 +30,8 @@ type EventLog = {
   status: "success" | "warning" | "info" | "error";
 };
 
+const SITE_ORIGIN = "https://instagram.gowith153.com";
+
 const users: User[] = [
   {
     id: "admin-demo",
@@ -91,7 +93,7 @@ function requireAuth(req: any, res: any) {
 }
 
 export default async function handler(req: any, res: any) {
-  const url = new URL(req.url || "/", "https://instagram.gowith153.com");
+  const url = new URL(req.url || "/", SITE_ORIGIN);
   const path = url.pathname.replace(/^\/api/, "") || "/";
   const method = req.method || "GET";
   const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
@@ -160,14 +162,35 @@ export default async function handler(req: any, res: any) {
     return;
   }
 
+  if (path === "/auth/facebook" && method === "GET") {
+    send(res, 200, {
+      connected: false,
+      message: "Meta OAuth placeholder is served from instagram.gowith153.com.",
+      tokenReceived: Boolean(url.searchParams.get("token")),
+    });
+    return;
+  }
+
   if (path === "/auth/deauthorize" && method === "POST") {
     events.unshift({ id: id("evt"), time: currentTime(), type: "Meta", text: "Meta deauthorization simulated.", status: "warning" });
-    send(res, 200, { url: "https://instagram.gowith153.com/api/auth/deletion/status", confirmation_code: id("del") });
+    send(res, 200, { url: `${SITE_ORIGIN}/api/auth/deletion/status`, confirmation_code: id("del") });
     return;
   }
 
   if (path === "/auth/deletion/status") {
     send(res, 200, { status: "completed" });
+    return;
+  }
+
+  if (path === "/webhook/instagram" && method === "GET") {
+    const challenge = url.searchParams.get("hub.challenge");
+    send(res, 200, challenge || { ok: true, endpoint: `${SITE_ORIGIN}/api/webhook/instagram` });
+    return;
+  }
+
+  if (path === "/webhook/instagram" && method === "POST") {
+    events.unshift({ id: id("evt"), time: currentTime(), type: "webhook", text: "Instagram webhook event received.", status: "info" });
+    send(res, 200, { ok: true });
     return;
   }
 
@@ -187,11 +210,11 @@ export default async function handler(req: any, res: any) {
   if (path === "/automations" && method === "POST") {
     const automation: Automation = {
       id: id("auto"),
-      name: body.name || "새 자동화",
+      name: body.name || "New automation",
       triggerType: body.triggerType || "comment",
       trigger: body.trigger || "",
       message: body.message || "",
-      status: body.status || "운영중",
+      status: body.status || "active",
       targetPostId: body.targetPostId || null,
       buttonText: body.buttonText || null,
       buttonUrl: body.buttonUrl || null,
@@ -240,13 +263,18 @@ export default async function handler(req: any, res: any) {
     return;
   }
 
+  if (path.match(/^\/leads\/([^/]+)$/) && method === "PUT") {
+    send(res, 200, { ok: true });
+    return;
+  }
+
   if (path === "/templates" && method === "GET") {
     send(res, 200, templates);
     return;
   }
 
   if (path === "/templates" && method === "POST") {
-    const template = { id: id("tpl"), name: body.name || "템플릿", content: body.content || "", type: body.type || "일반 안내" };
+    const template = { id: id("tpl"), name: body.name || "Template", content: body.content || "", type: body.type || "general" };
     templates.unshift(template);
     send(res, 200, template);
     return;
@@ -269,18 +297,18 @@ export default async function handler(req: any, res: any) {
   }
 
   if (path === "/simulator" && method === "POST") {
-    events.unshift({ id: id("evt"), time: currentTime(), type: body.type || "comment", text: body.text || "테스트 이벤트", status: "info" });
+    events.unshift({ id: id("evt"), time: currentTime(), type: body.type || "comment", text: body.text || "Test event", status: "info" });
     send(res, 200, { ok: true });
     return;
   }
 
   if (path === "/settings/meta" && method === "GET") {
-    send(res, 200, null);
+    send(res, 200, { connected: false, account: null });
     return;
   }
 
   if (path === "/settings/meta" && method === "POST") {
-    send(res, 200, { connected: false });
+    send(res, 200, { connected: false, account: null });
     return;
   }
 
