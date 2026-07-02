@@ -1830,6 +1830,46 @@ function App() {
                   </div>
                 )}
               </div>
+
+              {/* Instagram Official Integration Steps Guide (Inpock Guide Specs) */}
+              <div style={{ marginTop: "20px", background: "rgba(255,255,255,0.02)", border: "1px solid var(--border-color)", borderRadius: "12px", padding: "20px" }}>
+                <h3 style={{ margin: "0 0 12px", fontSize: "14px", fontWeight: "700", color: "var(--accent-emerald)", display: "flex", alignItems: "center", gap: "8px" }}>
+                  💡 인스타그램 공식 API 연동 필수 체크리스트 (4단계)
+                </h3>
+                <p style={{ fontSize: "12px", color: "var(--text-secondary)", margin: "0 0 20px", lineHeight: "1.5" }}>
+                  인포크매니저 및 공식 Meta 연동 규격에 따른 실연동 프로세스입니다. 아래 4단계를 완료하셔야 인스타그램 서버에서 메시지를 정상적으로 수신하고 발송할 수 있습니다.
+                </p>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "15px" }}>
+                  <div style={{ background: "rgba(0,0,0,0.15)", padding: "15px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.03)" }}>
+                    <div style={{ fontSize: "10px", fontWeight: "800", color: "var(--accent-emerald)", marginBottom: "6px" }}>STEP 1</div>
+                    <strong style={{ display: "block", fontSize: "13px", color: "var(--text-primary)", marginBottom: "4px" }}>프로페셔널 계정 전환</strong>
+                    <span style={{ fontSize: "11px", color: "var(--text-secondary)", lineHeight: "1.45", display: "block" }}>
+                      인스타그램 앱 설정에서 계정 유형을 <strong>[비즈니스]</strong> 또는 <strong>[크리에이터]</strong>로 반드시 전환해야 합니다 (개인 계정 연동 불가).
+                    </span>
+                  </div>
+                  <div style={{ background: "rgba(0,0,0,0.15)", padding: "15px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.03)" }}>
+                    <div style={{ fontSize: "10px", fontWeight: "800", color: "var(--accent-emerald)", marginBottom: "6px" }}>STEP 2</div>
+                    <strong style={{ display: "block", fontSize: "13px", color: "var(--text-primary)", marginBottom: "4px" }}>Facebook 페이지 연결</strong>
+                    <span style={{ fontSize: "11px", color: "var(--text-secondary)", lineHeight: "1.45", display: "block" }}>
+                      인스타그램 프로필 편집에서 회원님이 관리 권한을 가진 <strong>Facebook 페이지와 1:1로 프로필을 링크 연결</strong>해야 합니다.
+                    </span>
+                  </div>
+                  <div style={{ background: "rgba(0,0,0,0.15)", padding: "15px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.03)" }}>
+                    <div style={{ fontSize: "10px", fontWeight: "800", color: "var(--accent-emerald)", marginBottom: "6px" }}>STEP 3</div>
+                    <strong style={{ display: "block", fontSize: "13px", color: "var(--text-primary)", marginBottom: "4px" }}>메시지 접근 권한 허용</strong>
+                    <span style={{ fontSize: "11px", color: "var(--text-secondary)", lineHeight: "1.45", display: "block" }}>
+                      인스타 설정 ▶ [메시지 및 스토리 답장] ▶ [메시지 제어 기능] ▶ <strong>[메시지 접근 허용]</strong>을 반드시 활성화해야 댓글/DM 수신이 작동합니다.
+                    </span>
+                  </div>
+                  <div style={{ background: "rgba(0,0,0,0.15)", padding: "15px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.03)" }}>
+                    <div style={{ fontSize: "10px", fontWeight: "800", color: "var(--accent-emerald)", marginBottom: "6px" }}>STEP 4</div>
+                    <strong style={{ display: "block", fontSize: "13px", color: "var(--text-primary)", marginBottom: "4px" }}>액세스 토큰 입력 및 연동</strong>
+                    <span style={{ fontSize: "11px", color: "var(--text-secondary)", lineHeight: "1.45", display: "block" }}>
+                      상단 [Facebook으로 로그인] 버튼을 누르고, 발급받은 실제 Meta Access Token 정보를 팝업 양식에 입력하면 실시간 자동화 제어가 가동됩니다.
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Administrator notification configuration card (고도화 3단계) */}

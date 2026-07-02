@@ -862,12 +862,15 @@ app.get("/api/auth/facebook", (req: Request, res: Response) => {
     <html lang="ko">
     <head>
       <meta charset="UTF-8">
-      <title>Facebook 로그인 연동 - DM Launch</title>
+      <title>Instagram 연동 권한 승인 - DM Launch</title>
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+      <link href="https://fonts.googleapis.com/css2?family=Lobster&family=Noto+Sans+KR:wght@400;500;700;800&display=swap" rel="stylesheet">
       <style>
         body {
-          background: #0f172a;
-          color: #f1f5f9;
-          font-family: system-ui, sans-serif;
+          background: #121212;
+          color: #f4f4f5;
+          font-family: 'Noto Sans KR', sans-serif;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -876,105 +879,307 @@ app.get("/api/auth/facebook", (req: Request, res: Response) => {
           padding: 20px;
           box-sizing: border-box;
         }
-        .card {
-          background: #1e293b;
+        .container {
+          background: #1a1a1a;
+          width: 100%;
+          max-width: 460px;
+          border-radius: 20px;
+          border: 1px solid #2d2d2d;
           padding: 30px;
-          border-radius: 16px;
-          border: 1px solid rgba(255,255,255,0.08);
-          width: 100%;
-          max-width: 440px;
+          box-shadow: 0 15px 35px rgba(0,0,0,0.6);
+          box-sizing: border-box;
+        }
+        .insta-header {
           text-align: center;
-          box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+          margin-bottom: 25px;
         }
-        .logo {
-          font-size: 24px;
-          font-weight: 800;
-          color: #1877f2;
-          margin-bottom: 15px;
+        .insta-logo {
+          font-family: 'Lobster', cursive;
+          font-size: 42px;
+          color: #ffffff;
+          margin: 0;
+          letter-spacing: 1px;
         }
-        h2 { margin: 0 0 10px; font-size: 18px; }
-        p { color: #94a3b8; font-size: 12px; line-height: 1.5; margin: 0 0 20px; }
-        .scope-item {
-          background: rgba(255,255,255,0.02);
-          border: 1px solid rgba(255,255,255,0.05);
-          border-radius: 8px;
-          padding: 8px;
-          margin-bottom: 6px;
-          text-align: left;
-          font-size: 11px;
+        .insta-desc {
+          font-size: 13.5px;
+          line-height: 1.55;
+          color: #a1a1aa;
+          text-align: center;
+          margin: 20px 0 25px;
         }
-        .btn-connect {
-          display: block;
-          width: 100%;
-          padding: 12px;
-          background: #1877f2;
-          color: white;
-          text-decoration: none;
+        .highlight {
+          color: #3b82f6;
           font-weight: 700;
-          border-radius: 8px;
-          margin-top: 15px;
-          border: none;
-          cursor: pointer;
-          font-size: 13px;
         }
-        .btn-connect:hover { background: #166fe5; }
-        .form-control {
+        .permission-list {
           display: flex;
           flex-direction: column;
-          gap: 4px;
-          text-align: left;
-          margin-bottom: 12px;
+          gap: 20px;
+          margin-bottom: 30px;
         }
-        .form-control label {
-          font-size: 11px;
-          color: #94a3b8;
+        .permission-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        .permission-info {
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+          max-width: 80%;
+        }
+        .permission-title {
+          font-size: 14.5px;
           font-weight: 600;
+          color: #ffffff;
         }
-        .form-control input, .form-control textarea {
-          padding: 10px;
-          background: #0f172a;
-          border: 1px solid rgba(255,255,255,0.1);
-          border-radius: 6px;
+        .permission-subtitle {
+          font-size: 12px;
+          color: #71717a;
+        }
+        /* Switch Style */
+        .switch {
+          position: relative;
+          display: inline-block;
+          width: 44px;
+          height: 24px;
+        }
+        .switch input {
+          opacity: 0;
+          width: 0;
+          height: 0;
+        }
+        .slider {
+          position: absolute;
+          cursor: pointer;
+          top: 0; left: 0; right: 0; bottom: 0;
+          background-color: #3f3f46;
+          transition: .3s;
+          border-radius: 24px;
+        }
+        .slider:before {
+          position: absolute;
+          content: "";
+          height: 18px;
+          width: 18px;
+          left: 3px;
+          bottom: 3px;
+          background-color: white;
+          transition: .3s;
+          border-radius: 50%;
+        }
+        input:checked + .slider {
+          background-color: #3b82f6;
+        }
+        input:checked + .slider:before {
+          transform: translateX(20px);
+        }
+        input:disabled + .slider {
+          background-color: #27272a;
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+        /* Buttons */
+        .btn-allow {
+          width: 100%;
+          padding: 13px;
+          background: #3b82f6;
           color: white;
-          font-size: 13px;
+          font-size: 15px;
+          font-weight: 700;
+          border: none;
+          border-radius: 10px;
+          cursor: pointer;
+          margin-top: 10px;
+          transition: background 0.2s;
         }
-        .form-control textarea {
+        .btn-allow:hover {
+          background: #2563eb;
+        }
+        .btn-cancel {
+          width: 100%;
+          padding: 13px;
+          background: #27272a;
+          color: #a1a1aa;
+          font-size: 15px;
+          font-weight: 700;
+          border: none;
+          border-radius: 10px;
+          cursor: pointer;
+          margin-top: 10px;
+          text-align: center;
+          transition: background 0.2s;
+        }
+        .btn-cancel:hover {
+          background: #3f3f46;
+          color: white;
+        }
+        /* Forms for credentials */
+        .credential-form {
+          display: none;
+        }
+        .form-group {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          margin-bottom: 16px;
+          text-align: left;
+        }
+        .form-group label {
+          font-size: 12px;
+          font-weight: 700;
+          color: #a1a1aa;
+        }
+        .form-group input, .form-group textarea {
+          background: #09090b;
+          border: 1px solid #27272a;
+          border-radius: 8px;
+          padding: 11px;
+          color: #ffffff;
+          font-size: 13.5px;
+          outline: none;
+          box-sizing: border-box;
+          width: 100%;
+        }
+        .form-group input:focus, .form-group textarea:focus {
+          border-color: #3b82f6;
+        }
+        .form-group textarea {
           font-family: monospace;
           resize: none;
         }
       </style>
     </head>
     <body>
-      <div class="card">
-        <div class="logo">facebook</div>
-        <h2>인스타그램 비즈니스 계정 공식 연동</h2>
-        <p>서비스 활성화를 위해 Meta Developer API 권한 및 보안 액세스 토큰 정보를 등록합니다.</p>
-        
-        <div class="scope-item" style="margin-bottom: 20px;">
-          🔑 <strong>필수 요구 권한:</strong><br>
-          - instagram_business_manage_messages (DM 제어)<br>
-          - instagram_business_manage_comments (댓글 감지)
+      <div class="container">
+        <div class="insta-header">
+          <h1 class="insta-logo">Instagram</h1>
         </div>
 
-        <form action="/api/auth/facebook/manual" method="POST">
-          <input type="hidden" name="token" value="${token || ''}">
-          <div class="form-control">
-            <label>인스타그램 사용자명 (Username)</label>
-            <input type="text" name="username" placeholder="예: davey_marketing" required>
+        <!-- Step 1: Permission Grant View -->
+        <div id="view-permission">
+          <div class="form-group" style="margin-bottom: 25px;">
+            <label>연동할 인스타그램 계정명 (Username)</label>
+            <input type="text" id="input-username" placeholder="david153.official" required style="border-color: #3f3f46;">
           </div>
-          <div class="form-control">
-            <label>Instagram ID (숫자 식별자)</label>
-            <input type="text" name="instagramId" placeholder="예: 17841400000000000" required>
+
+          <div class="insta-desc">
+            <span class="highlight">DM Launch</span>에서 <span id="display-username" class="highlight">david153.official</span> 계정에 대한 액세스를 요청합니다. 허용을 선택하면 <span class="highlight">DM Launch</span>에서 다음을 수행할 수 있게 됩니다:
           </div>
-          <div class="form-control">
-            <label>Meta 액세스 토큰 (Access Token)</label>
-            <textarea name="accessToken" rows="4" placeholder="Meta Graph API에서 발급받은 EAAG... 로 시작하는 토큰 입력" required></textarea>
+
+          <div class="permission-list">
+            <div class="permission-item">
+              <div class="permission-info">
+                <span class="permission-title">프로필 조회 및 미디어 액세스 (필수)</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" checked disabled>
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="permission-item">
+              <div class="permission-info">
+                <span class="permission-title">댓글 액세스 및 관리</span>
+                <span class="permission-subtitle">릴스 및 게시글 댓글 실시간 감지</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="chk-comments" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="permission-item">
+              <div class="permission-info">
+                <span class="permission-title">메시지 액세스 및 관리</span>
+                <span class="permission-subtitle">자동 DM 발송 및 대화 관리 권한</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="chk-messages" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="permission-item">
+              <div class="permission-info">
+                <span class="permission-title">콘텐츠 액세스 및 게시</span>
+                <span class="permission-subtitle">자동 응답 시 관련 미디어 조회</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="chk-content" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="permission-item">
+              <div class="permission-info">
+                <span class="permission-title">인사이트 액세스 및 관리</span>
+                <span class="permission-subtitle">전환 분석 및 통계 지표 활용</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="chk-insights" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
           </div>
-          <button type="submit" class="btn-connect" style="background: #10b981; color: #0f172a; margin-top: 20px;">
-            인스타그램 계정 연동 완료
-          </button>
-        </form>
+
+          <button type="button" class="btn-allow" onclick="goToCredentials()">허용</button>
+          <button type="button" class="btn-cancel" onclick="window.close()">취소</button>
+        </div>
+
+        <!-- Step 2: Meta Graph API Token Registration -->
+        <div id="view-credentials" class="credential-form">
+          <h2 style="font-size: 18px; font-weight: 700; margin: 0 0 10px; text-align: center;">보안 토큰 인증 등록</h2>
+          <p style="font-size: 12px; color: #a1a1aa; line-height: 1.5; text-align: center; margin: 0 0 20px;">
+            공식 API 연동을 마무리하기 위해 Meta Graph API 토큰과 Instagram 고유 ID 값을 기입해 주세요.
+          </p>
+
+          <form action="/api/auth/facebook/manual" method="POST">
+            <input type="hidden" name="token" value="${token || ''}">
+            <input type="hidden" name="username" id="form-username">
+            
+            <div class="form-group">
+              <label>Instagram ID (숫자 식별자)</label>
+              <input type="text" name="instagramId" placeholder="예: 17841400000000000" required>
+            </div>
+            
+            <div class="form-group">
+              <label>Meta 액세스 토큰 (Access Token)</label>
+              <textarea name="accessToken" rows="5" placeholder="Meta Graph API에서 발급받은 EAAG... 로 시작하는 토큰 입력" required></textarea>
+            </div>
+
+            <button type="submit" class="btn-allow" style="margin-top: 15px;">인스타그램 계정 연동 완료</button>
+            <button type="button" class="btn-cancel" onclick="goToPermission()">이전 단계로</button>
+          </form>
+        </div>
       </div>
+
+      <script>
+        const inputUsername = document.getElementById('input-username');
+        const displayUsername = document.getElementById('display-username');
+        const formUsername = document.getElementById('form-username');
+
+        inputUsername.addEventListener('input', (e) => {
+          const val = e.target.value.trim() || 'david153.official';
+          displayUsername.textContent = val;
+          formUsername.value = val;
+        });
+
+        // Initialize display
+        formUsername.value = inputUsername.value || 'david153.official';
+
+        function goToCredentials() {
+          const usernameVal = inputUsername.value.trim();
+          if (!usernameVal) {
+            alert('연동할 인스타그램 계정명을 입력해 주세요.');
+            inputUsername.focus();
+            return;
+          }
+          document.getElementById('view-permission').style.display = 'none';
+          document.getElementById('view-credentials').style.display = 'block';
+        }
+
+        function goToPermission() {
+          document.getElementById('view-permission').style.display = 'block';
+          document.getElementById('view-credentials').style.display = 'none';
+        }
+      </script>
     </body>
     </html>
   `;
