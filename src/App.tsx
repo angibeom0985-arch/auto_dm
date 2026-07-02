@@ -903,7 +903,7 @@ function App() {
             <div style={{ display: "inline-flex", width: "48px", height: "48px", background: "var(--accent-emerald)", borderRadius: "12px", alignItems: "center", justifyContent: "center", marginBottom: "15px", color: "#000" }}>
               <Camera size={26} />
             </div>
-            <h1 style={{ fontSize: "24px", fontWeight: "800", color: "var(--text-primary)", margin: "0 0 5px" }}>DM Launch</h1>
+            <h1 style={{ fontSize: "24px", fontWeight: "800", color: "var(--text-primary)", margin: "0 0 5px" }}>DOT 인스타 DM 자동화</h1>
             <p style={{ fontSize: "13px", color: "var(--text-secondary)", margin: 0 }}>인스타그램 고객 소통 자동화 마케팅 솔루션</p>
           </div>
 
@@ -1016,7 +1016,7 @@ function App() {
             <Camera size={22} />
           </div>
           <div>
-            <strong>DM Launch</strong>
+            <strong>DOT 인스타 DM 자동화</strong>
             <span>Automation Console</span>
           </div>
         </div>
@@ -1165,7 +1165,7 @@ function App() {
                 </span>
                 <h2 style={{ marginTop: "16px", fontSize: "28px", fontWeight: "900", lineHeight: "1.3", color: "white" }}>
                   인스타 떡상의 치트키, <br />
-                  이제 DM Launch로 무료 자동화하세요!
+                  이제 DOT 인스타 DM 자동화로 무료 자동화하세요!
                 </h2>
                 <p style={{ marginTop: "12px", fontSize: "13.5px", color: "rgba(255, 255, 255, 0.85)", lineHeight: "1.6" }}>
                   게시물 개수, 발송 개수, 사용 기간 상관없이 평생 유료 전환 없이 100% 무료 무제한! 

@@ -1,4 +1,4 @@
-# DM Launch Console
+# DOT 인스타 DM 자동화
 
 Instagram 공식 API 기반 자동 DM 서비스를 만들기 위한 웹 콘솔 MVP입니다.
 
