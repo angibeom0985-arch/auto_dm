@@ -372,6 +372,7 @@ function App() {
   // Auth Submit Handlers (고도화 5단계)
   // ==========================================
   const handleAuthSubmit = async (e: React.FormEvent) => {
+    console.log("🔑 [Auth] handleAuthSubmit called! Mode:", authMode, "User:", emailInput, "Pass:", passwordInput ? "Entered" : "Empty");
     e.preventDefault();
     setAuthError("");
 
@@ -983,7 +984,6 @@ function App() {
             <button 
               type="submit" 
               className="primary-button" 
-              onClick={handleAuthSubmit}
               style={{ height: "45px", fontSize: "14px", fontWeight: "700", width: "100%", justifyContent: "center", marginTop: "10px" }}
             >
               {authMode === "login" ? "로그인하기" : "가입하기"}
