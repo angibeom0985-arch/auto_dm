@@ -1,3 +1,30 @@
 DATABASE_URL="file:./dev.db"
 PORT=5000
 META_VERIFY_TOKEN="dml_secret_verify_token_12345"
+
+# Meta Instagram production configuration (do not commit real secrets)
+META_APP_ID=""
+META_APP_SECRET=""
+META_WEBHOOK_URL="https://your-domain.example/webhook/instagram"
+META_OAUTH_REDIRECT_URL="https://your-domain.example/api/auth/facebook/callback"
+META_APP_MODE="development"
+META_REQUIRED_PERMISSIONS="instagram_basic,instagram_manage_messages,instagram_manage_comments,pages_manage_metadata"
+
+# Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+META_TOKEN_ENCRYPTION_KEY=""
+META_OAUTH_STATE_SECRET=""
+META_GRAPH_API_VERSION="v26.0"
+META_OAUTH_SCOPES="instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments"
+META_WEBHOOK_FIELDS="messages,comments,messaging_postbacks"
+FRONTEND_ORIGIN="https://your-domain.example"
+
+# Keep false in production. Manual access-token import bypasses the standard OAuth journey.
+META_ALLOW_MANUAL_TOKEN_IMPORT="false"
+
+# SUPABASE / VERCEL FREE TEST
+# Runtime: Supabase Shared Pooler transaction URL (port 6543). Never expose to the frontend.
+DATABASE_URL="postgresql://...:6543/postgres?pgbouncer=true&connection_limit=1&connect_timeout=30"
+# Prisma schema push/migration: direct connection or Supavisor session URL.
+DIRECT_URL="postgresql://...:5432/postgres?connect_timeout=30"
+SERVERLESS_TEST_MODE="true"
+TEST_TRIGGER_SECRET="replace-with-a-random-32-byte-secret"

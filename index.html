@@ -4,9 +4,233 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>DOT 인스타 DM 자동화</title>
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="shortcut icon" href="/favicon.png" />
+    <!-- 강력한 복사 및 개발자 도구 방지용 인라인 CSS -->
+    <style>
+      /* 모든 클릭 가능한 요소에 마우스 호버 시 손가락 커서 적용 */
+      a,
+      button,
+      input[type="button"],
+      input[type="submit"],
+      input[type="image"],
+      select,
+      [role="button"],
+      [onclick],
+      .cursor-pointer {
+        cursor: pointer !important;
+      }
+
+      /* 개발자 도구 Fallback 모달 스타일 */
+      #dot-devtools-fallback {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483647;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+        padding: 32px 16px;
+        overflow: auto;
+        color: #fff;
+        background: rgba(10, 10, 10, 0.97);
+        backdrop-filter: blur(18px);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      }
+      #dot-devtools-fallback[data-open="true"] {
+        display: flex;
+      }
+      .dot-devtools-fallback-card {
+        width: min(100%, 520px);
+        overflow: hidden;
+        border: 1px solid rgba(239, 68, 68, 0.35);
+        border-radius: 16px;
+        background: #17171b;
+        box-shadow: 0 24px 90px rgba(0, 0, 0, 0.75);
+      }
+      .dot-devtools-fallback-header {
+        padding: 20px 24px;
+        border-bottom: 1px solid rgba(239, 68, 68, 0.15);
+        background: rgba(239, 68, 68, 0.06);
+      }
+      .dot-devtools-fallback-label {
+        margin: 0;
+        color: #fee2e2;
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+      .dot-devtools-fallback-body {
+        padding: 24px;
+      }
+      .dot-devtools-fallback-title {
+        margin: 0;
+        color: #fff;
+        font-size: 22px;
+        font-weight: 900;
+        line-height: 1.35;
+      }
+      .dot-devtools-fallback-description {
+        margin: 12px 0 0;
+        color: rgba(254, 242, 242, 0.85);
+        font-size: 14px;
+        line-height: 1.7;
+      }
+      .dot-devtools-fallback-notice {
+        margin-top: 20px;
+        padding: 16px;
+        border: 1px solid rgba(252, 211, 77, 0.3);
+        border-radius: 12px;
+        color: #fef3c7;
+        background: rgba(245, 158, 11, 0.08);
+        font-size: 13px;
+        line-height: 1.6;
+      }
+      .dot-devtools-fallback-button {
+        width: 100%;
+        min-width: 200px;
+        margin-top: 24px;
+        padding: 14px 20px;
+        border: 0;
+        border-radius: 12px;
+        color: #fff;
+        background: #ef4444;
+        box-shadow: 0 10px 25px rgba(239, 68, 68, 0.3);
+        font-size: 14px;
+        font-weight: 900;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .dot-devtools-fallback-button:hover {
+        background: #dc2626;
+        box-shadow: 0 12px 30px rgba(220, 38, 38, 0.4);
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
+
+    <!-- 개발자 도구 차단용 경고 오버레이 모달 -->
+    <div
+      id="dot-devtools-fallback"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="dot-devtools-fallback-title"
+      aria-hidden="true"
+    >
+      <section class="dot-devtools-fallback-card">
+        <div class="dot-devtools-fallback-header">
+          <p class="dot-devtools-fallback-label">DOT 보안 감지</p>
+        </div>
+        <div class="dot-devtools-fallback-body">
+          <h2 id="dot-devtools-fallback-title" class="dot-devtools-fallback-title">
+            개발자 도구를 닫아 주세요
+          </h2>
+          <p class="dot-devtools-fallback-description">
+            DOT 인스타 DM 자동화는 계정 유출 방지 및 보안 토큰 보호를 위해 개발자 도구 사용을 전면 통제하고 있습니다.
+            <strong>개발자 도구 창을 종료(닫기)한 후</strong> 아래 버튼을 눌러 새로고침해 주세요.
+          </p>
+          <div class="dot-devtools-fallback-notice">
+            * 개발자 도구가 감지되면 시스템 데이터 유출 방지를 위해 페이지 내용 표시 및 제어 기능이 일시 중지됩니다.
+          </div>
+          <button id="dot-devtools-fallback-button" class="dot-devtools-fallback-button" type="button">
+            창을 닫은 후 페이지 새로고침
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <!-- 보안 로직 스크립트 -->
+    <script>
+      (function () {
+        "use strict";
+
+        // 개발자 도구 허용 경로 (/debug) 조건 확인
+        function isDebugPath() {
+          return true;
+        }
+
+
+        // /debug 인 경우에는 감지기 자체를 비활성화 (개발자 도구 사용 허용)
+        if (isDebugPath()) {
+          console.log("[DOT] /debug path detected. Screen security disabled.");
+          return;
+        }
+
+        var overlay = document.getElementById("dot-devtools-fallback");
+        var retryButton = document.getElementById("dot-devtools-fallback-button");
+        var devToolsDetected = false;
+        if (!overlay) return;
+
+        // 우클릭 방지
+        document.addEventListener("contextmenu", function (e) {
+          if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return true;
+          e.preventDefault();
+          return false;
+        });
+
+        // 윈도우 창 크기 변화 및 dpr 갭 기반 개발자 도구창 탐지 함수
+        function isDevToolsLikelyOpen() {
+          if (typeof window === "undefined") return false;
+
+          // 1. 모바일 기기 오탐 방지를 위한 미세한 사이즈 스킵
+          if (window.innerWidth < 650 || window.innerHeight < 450) {
+            return false;
+          }
+
+          // 2. 브라우저 줌 비율 오탐 방지 (scale scale 임계치 5%)
+          if (window.visualViewport && Math.abs(window.visualViewport.scale - 1) > 0.05) {
+            return false;
+          }
+
+          var dpr = window.devicePixelRatio || 1;
+          var expectedInnerWidth = window.outerWidth / dpr;
+          var expectedInnerHeight = window.outerHeight / dpr;
+
+          var widthGap = Math.max(0, expectedInnerWidth - window.innerWidth);
+          // 브라우저 주소창 및 북마크 탭 높이 오차 반영 (150px)
+          var heightGap = Math.max(0, expectedInnerHeight - window.innerHeight - 150);
+
+          // 260px 이상의 창 차이가 발생하면 개발자 도구가 도킹(우측/하단)된 것으로 판별
+          var threshold = 260;
+
+          return widthGap > threshold || heightGap > threshold;
+        }
+
+        function updateDevToolsWarning() {
+          // 수시로 다시 /debug 경로인지 더블 체크
+          if (isDebugPath()) {
+            overlay.setAttribute("data-open", "false");
+            overlay.setAttribute("aria-hidden", "true");
+            document.documentElement.style.overflow = "";
+            return;
+          }
+
+          if (isDevToolsLikelyOpen()) {
+            devToolsDetected = true;
+          } else {
+            devToolsDetected = false;
+          }
+
+          overlay.setAttribute("data-open", devToolsDetected ? "true" : "false");
+          overlay.setAttribute("aria-hidden", devToolsDetected ? "false" : "true");
+          document.documentElement.style.overflow = devToolsDetected ? "hidden" : "";
+        }
+
+        if (retryButton) {
+          retryButton.addEventListener("click", function () {
+            window.location.reload();
+          });
+        }
+
+        // 창 조절 감지 및 주기적인 0.6초 주기 폴링 모니터링 가동
+        window.addEventListener("resize", updateDevToolsWarning);
+        window.setInterval(updateDevToolsWarning, 600);
+        updateDevToolsWarning();
+      })();
+    </script>
+
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

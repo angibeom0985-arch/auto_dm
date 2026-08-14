@@ -1,7 +1,8 @@
 import { PrismaClient, QueueItem } from "@prisma/client";
 import { sendPrivateReply, sendDirectMessage } from "./metaClient";
+import { decryptMetaToken } from "./metaSecurity";
 
-const prisma = new PrismaClient();
+import { prisma } from "./db";
 let intervalId: NodeJS.Timeout | null = null;
 let cleanupIntervalId: NodeJS.Timeout | null = null;
 let isProcessing = false;
@@ -71,7 +72,7 @@ export async function cleanupOldLogs() {
 /**
  * Polling function to process PENDING messages in QueueItem database
  */
-async function processQueue() {
+export async function processPendingQueue(limit = 5) {
   if (isProcessing) return;
   isProcessing = true;
 
@@ -121,7 +122,7 @@ async function processQueue() {
         retryCount: { lt: 3 },
       },
       orderBy: { createdAt: "asc" },
-      take: 5,
+      take: Math.min(Math.max(limit, 1), 25),
     });
 
     if (pendingItems.length === 0) {
@@ -239,25 +240,26 @@ async function processQueue() {
           : null;
 
         let sendResult;
-
+        const decryptedAccessToken = decryptMetaToken(account.accessToken);
         if (automation.triggerType === "comment") {
           sendResult = await sendPrivateReply(
+            account.instagramId,
             item.recipientId,
             item.body,
-            account.accessToken,
+            decryptedAccessToken,
             automation.buttonText,
             trackingUrl
           );
         } else {
           sendResult = await sendDirectMessage(
+            account.instagramId,
             item.recipientId,
             item.body,
-            account.accessToken,
+            decryptedAccessToken,
             automation.buttonText,
             trackingUrl
           );
         }
-
         if (sendResult.success) {
           // Increment sent count of automation
           await prisma.automation.update({
@@ -332,7 +334,7 @@ export function startDeliveryWorker() {
   }
 
   console.log("🚀 [Worker] Starting background delivery worker loop (Interval: 3s)...");
-  intervalId = setInterval(processQueue, 3000);
+  intervalId = setInterval(() => void processPendingQueue(), 3000);
 
   // Run cleanup once immediately on startup
   cleanupOldLogs();

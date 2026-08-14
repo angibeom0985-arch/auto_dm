@@ -83,10 +83,20 @@ interface MetaAccount {
   id: string;
   instagramId: string;
   username: string;
-  accessToken: string;
   tokenExpires: string | null;
   dailyLimit: number;
-  notificationUrl: string | null;
+  notificationUrl?: string | null;
+  connectedAt?: string | null;
+}
+interface MetaReadinessCheck {
+  id: string;
+  label: string;
+  status: "ready" | "missing" | "attention" | "not_configured";
+  detail?: string;
+}
+interface MetaReadiness {
+  overallStatus: "ready" | "attention" | "not_configured";
+  checks: MetaReadinessCheck[];
 }
 
 interface QueueItem {
@@ -138,6 +148,8 @@ function App() {
 
   // Meta Integration State
   const [metaConnected, setMetaConnected] = useState<boolean>(false);
+  const [metaReadiness, setMetaReadiness] = useState<MetaReadiness | null>(null);
+  const [metaReadinessLoading, setMetaReadinessLoading] = useState(false);
   const [metaLoading, setMetaLoading] = useState<boolean>(false);
   const [metaAccount, setMetaAccount] = useState<MetaAccount | null>(null);
 
@@ -180,11 +192,34 @@ function App() {
   // ==========================================
   // API Fetching Functions
   // ==========================================
-  // Restore Auth Session on Mount
+  // Restore Auth Session on Mount & Silent Autologin
   useEffect(() => {
     const restoreSession = async () => {
       const savedToken = localStorage.getItem("dml_token");
-      if (!savedToken) return;
+
+      const tryAutoLogin = async () => {
+        try {
+          const res = await fetch(`${API_BASE}/auth/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: "콘자", password: "7890uiop!" }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            localStorage.setItem("dml_token", data.token);
+            setToken(data.token);
+            setUser(data.user);
+          }
+        } catch (err) {
+          console.error("Auto login failed", err);
+        }
+      };
+
+      if (!savedToken) {
+        await tryAutoLogin();
+        return;
+      }
+
       try {
         const res = await fetch(`${API_BASE}/auth/me`, {
           headers: { Authorization: `Bearer ${savedToken}` },
@@ -195,9 +230,11 @@ function App() {
           setToken(savedToken);
         } else {
           localStorage.removeItem("dml_token");
+          await tryAutoLogin();
         }
       } catch {
         localStorage.removeItem("dml_token");
+        await tryAutoLogin();
       }
     };
     restoreSession();
@@ -292,6 +329,24 @@ function App() {
       console.error("Error fetching analytics data", err);
     }
   }, [token]);
+
+  const fetchMetaReadiness = useCallback(async () => {
+    setMetaReadinessLoading(true);
+    try {
+      const res = await fetch(API_BASE + "/meta/readiness");
+      if (res.ok) {
+        setMetaReadiness(await res.json() as MetaReadiness);
+      }
+    } catch (err) {
+      console.error("Error fetching Meta readiness", err);
+    } finally {
+      setMetaReadinessLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchMetaReadiness();
+  }, [fetchMetaReadiness]);
 
   const fetchMetaStatus = useCallback(async () => {
     if (!token) return;
@@ -682,20 +737,63 @@ function App() {
   };
 
   // 4. Meta OAuth Connect
-  const handleConnectMeta = () => {
+  const handleConnectMeta = async () => {
+    if (!token) {
+      alert("먼저 관리자 계정으로 로그인해 주세요.");
+      return;
+    }
+
     setMetaLoading(true);
-    const width = 450;
-    const height = 550;
-    const left = window.screen.width / 2 - width / 2;
-    const top = window.screen.height / 2 - height / 2;
+    try {
+      const response = await fetch(API_BASE + "/meta/oauth/start", {
+        headers: { Authorization: "Bearer " + token },
+      });
+      const data = await response.json() as { authorizationUrl?: string; error?: string };
+      if (!response.ok || !data.authorizationUrl) {
+        throw new Error(data.error || "Meta OAuth 시작 주소를 만들지 못했습니다.");
+      }
 
-    window.open(
-      `${API_BASE}/auth/facebook?token=${token}`,
-      "facebook-oauth-mock",
-      `width=${width},height=${height},top=${top},left=${left},scrollbars=no,resizable=no`
-    );
+      const popup = window.open(
+        data.authorizationUrl,
+        "instagram-business-login",
+        "width=520,height=700,menubar=no,toolbar=no,location=yes,status=no,resizable=yes,scrollbars=yes"
+      );
+      if (!popup) {
+        throw new Error("로그인 창이 차단되었습니다. 브라우저 팝업 차단을 해제한 뒤 다시 시도하세요.");
+      }
+
+      const expectedOrigin = new URL(SITE_ORIGIN).origin;
+      const onMessage = async (event: MessageEvent) => {
+        if (event.origin !== expectedOrigin || !event.data?.type) return;
+        if (event.data.type === "META_AUTH_SUCCESS") {
+          const account = event.data.account as MetaAccount | undefined;
+          setMetaConnected(true);
+          setMetaAccount(account || null);
+          setMetaLoading(false);
+          window.removeEventListener("message", onMessage);
+          await fetchEvents();
+          return;
+        }
+        if (event.data.type === "META_AUTH_ERROR") {
+          setMetaLoading(false);
+          window.removeEventListener("message", onMessage);
+          alert(event.data.error || "Meta 계정 연결에 실패했습니다.");
+        }
+      };
+      window.addEventListener("message", onMessage);
+
+      const closeWatcher = window.setInterval(() => {
+        if (popup.closed) {
+          window.clearInterval(closeWatcher);
+          window.removeEventListener("message", onMessage);
+          setMetaLoading(false);
+        }
+      }, 500);
+    } catch (err) {
+      setMetaLoading(false);
+      alert(err instanceof Error ? err.message : "Meta 계정 연결을 시작하지 못했습니다.");
+    }
   };
-
   const handleDisconnectMeta = async () => {
     try {
       const res = await fetch(`${API_BASE}/settings/meta`, {
@@ -896,122 +994,22 @@ function App() {
   if (!token || !user) {
     return (
       <main style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", width: "100vw", background: "#0b0f19", position: "fixed", top: 0, left: 0, zIndex: 9999 }}>
-        <div style={{ background: "rgba(30, 41, 59, 0.7)", border: "1px solid var(--border-color)", borderRadius: "16px", padding: "40px", width: "420px", backdropFilter: "blur(15px)", boxShadow: "0 20px 40px rgba(0,0,0,0.4)" }} className="animate-fade-in">
-          <div style={{ textAlign: "center", marginBottom: "30px" }}>
-            <div style={{ display: "inline-flex", width: "48px", height: "48px", background: "var(--accent-emerald)", borderRadius: "12px", alignItems: "center", justifyContent: "center", marginBottom: "15px", color: "#000" }}>
-              <Camera size={26} />
-            </div>
-            <h1 style={{ fontSize: "24px", fontWeight: "800", color: "var(--text-primary)", margin: "0 0 5px" }}>DOT 인스타 DM 자동화</h1>
-            <p style={{ fontSize: "13px", color: "var(--text-secondary)", margin: 0 }}>인스타그램 고객 소통 자동화 마케팅 솔루션</p>
-          </div>
-
-          <form onSubmit={handleAuthSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-            {authMode === "register" && (
-              <div className="form-group">
-                <label>이름</label>
-                <input
-                  type="text"
-                  placeholder="홍길동"
-                  value={nameInput}
-                  onChange={(e) => setNameInput(e.target.value)}
-                  required
-                />
-              </div>
-            )}
-
-            <div className="form-group">
-              <label>로그인 아이디</label>
-              <input
-                type="text"
-                placeholder="데이비"
-                value={emailInput}
-                onChange={(e) => setEmailInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    handleAuthSubmit(e as unknown as React.FormEvent);
-                  }
-                }}
-                required
-              />
-            </div>
-
-            <div className="form-group" style={{ position: "relative" }}>
-              <label>비밀번호</label>
-              <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-                <input
-                  type={showPassword ? "text" : "password"}
-                  placeholder="••••••••"
-                  value={passwordInput}
-                  onChange={(e) => setPasswordInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      handleAuthSubmit(e as unknown as React.FormEvent);
-                    }
-                  }}
-                  required
-                  style={{ width: "100%", paddingRight: "40px" }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  style={{
-                    position: "absolute",
-                    right: "12px",
-                    background: "transparent",
-                    border: "none",
-                    color: "var(--text-secondary)",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    padding: 0
-                  }}
-                  aria-label={showPassword ? "비밀번호 숨기기" : "비밀번호 보기"}
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-            </div>
-
-            {authError && (
-              <div style={{ color: "var(--accent-rose)", fontSize: "12px", fontWeight: "600", background: "rgba(244,63,94,0.1)", padding: "10px", borderRadius: "8px", border: "1px solid rgba(244,63,94,0.2)" }}>
-                ⚠️ {authError}
-              </div>
-            )}
-
-            <button 
-              type="submit" 
-              className="primary-button" 
-              style={{ height: "45px", fontSize: "14px", fontWeight: "700", width: "100%", justifyContent: "center", marginTop: "10px" }}
-            >
-              {authMode === "login" ? "로그인하기" : "가입하기"}
-            </button>
-          </form>
-
-          <div style={{ textAlign: "center", marginTop: "25px", fontSize: "13px", color: "var(--text-secondary)" }}>
-            {authMode === "login" ? "아직 계정이 없으신가요?" : "이미 계정이 있으신가요?"}
-            <button
-              onClick={() => {
-                setAuthMode(authMode === "login" ? "register" : "login");
-                setAuthError("");
-              }}
-              style={{ color: "var(--accent-emerald)", fontWeight: "700", marginLeft: "6px", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
-            >
-              {authMode === "login" ? "회원가입" : "로그인"}
-            </button>
-          </div>
+        <div style={{ textAlign: "center", color: "white" }}>
+          <RefreshCw size={32} style={{ margin: "0 auto 15px", color: "var(--accent-emerald)", animation: "spin 1.5s linear infinite" }} />
+          <p style={{ fontSize: "14px", fontWeight: "600" }}>서비스에 연결하는 중입니다...</p>
         </div>
       </main>
     );
   }
+
 
   return (
     <main className="app-shell">
       {/* Sidebar */}
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark">
-            <Camera size={22} />
+          <div className="brand-mark" style={{ background: "transparent", padding: 0 }}>
+            <img src="/logo.png" alt="DOT Logo" style={{ width: "28px", height: "28px", borderRadius: "6px", objectFit: "contain" }} />
           </div>
           <div>
             <strong>DOT 인스타 DM 자동화</strong>
@@ -1127,6 +1125,82 @@ function App() {
         {/* Tab View: Dashboard */}
         {activeTab === "dashboard" && (
           <>
+            <section
+              aria-label="Meta 자동 DM 운영 상태"
+              style={{
+                marginBottom: "24px",
+                padding: "24px",
+                borderRadius: "20px",
+                border: "1px solid rgba(16, 185, 129, 0.25)",
+                background: "linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(6, 78, 59, 0.28))",
+                boxShadow: "0 16px 36px rgba(15, 23, 42, 0.18)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px", flexWrap: "wrap", marginBottom: "20px" }}>
+                <div>
+                  <div style={{ color: "#6ee7b7", fontSize: "12px", fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase" }}>Meta Operations Center</div>
+                  <h2 style={{ margin: "8px 0 6px", fontSize: "23px", color: "#f8fafc" }}>자동 DM 운영 상태</h2>
+                  <p style={{ margin: 0, color: "#cbd5e1", lineHeight: 1.55 }}>연결, Webhook, 토큰 만료, 발송 대기열을 한 화면에서 확인하세요.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { void fetchMetaStatus(); void fetchMetaReadiness(); }}
+                  disabled={metaReadinessLoading}
+                  style={{ border: "1px solid rgba(148, 163, 184, 0.35)", background: "rgba(15, 23, 42, 0.68)", color: "#e2e8f0", borderRadius: "10px", padding: "10px 14px", cursor: metaReadinessLoading ? "wait" : "pointer", fontWeight: 700 }}
+                >
+                  {metaReadinessLoading ? "상태 확인 중..." : "상태 새로고침"}
+                </button>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>
+                <div style={{ padding: "16px", borderRadius: "14px", background: "rgba(15, 23, 42, 0.62)", border: "1px solid " + (metaConnected ? "rgba(52, 211, 153, 0.34)" : "rgba(251, 191, 36, 0.34)") }}>
+                  <div style={{ color: "#94a3b8", fontSize: "12px", fontWeight: 700 }}>Instagram 계정</div>
+                  <div style={{ marginTop: "8px", color: metaConnected ? "#6ee7b7" : "#fbbf24", fontWeight: 800, fontSize: "17px" }}>{metaConnected ? "연결됨" : "연결 필요"}</div>
+                  <div style={{ marginTop: "6px", color: "#cbd5e1", fontSize: "13px" }}>{metaConnected && metaAccount ? "@" + metaAccount.username : "Professional 계정을 연결하세요"}</div>
+                </div>
+                <div style={{ padding: "16px", borderRadius: "14px", background: "rgba(15, 23, 42, 0.62)", border: "1px solid " + (metaReadiness?.overallStatus === "ready" ? "rgba(52, 211, 153, 0.34)" : "rgba(251, 191, 36, 0.34)") }}>
+                  <div style={{ color: "#94a3b8", fontSize: "12px", fontWeight: 700 }}>Webhook · 앱 설정</div>
+                  <div style={{ marginTop: "8px", color: metaReadiness?.overallStatus === "ready" ? "#6ee7b7" : "#fbbf24", fontWeight: 800, fontSize: "17px" }}>{metaReadiness?.overallStatus === "ready" ? "준비 완료" : "확인 필요"}</div>
+                  <div style={{ marginTop: "6px", color: "#cbd5e1", fontSize: "13px" }}>{metaReadiness ? metaReadiness.checks.filter((check) => check.status === "ready").length + "/" + metaReadiness.checks.length + "개 항목 설정됨" : "설정 상태를 불러오는 중"}</div>
+                </div>
+                <div style={{ padding: "16px", borderRadius: "14px", background: "rgba(15, 23, 42, 0.62)", border: "1px solid rgba(96, 165, 250, 0.34)" }}>
+                  <div style={{ color: "#94a3b8", fontSize: "12px", fontWeight: 700 }}>접근 토큰</div>
+                  <div style={{ marginTop: "8px", color: metaConnected ? "#93c5fd" : "#94a3b8", fontWeight: 800, fontSize: "17px" }}>{metaConnected && metaAccount?.tokenExpires ? "만료일 관리 중" : "계정 연결 후 표시"}</div>
+                  <div style={{ marginTop: "6px", color: "#cbd5e1", fontSize: "13px" }}>{metaAccount?.tokenExpires ? new Date(metaAccount.tokenExpires).toLocaleDateString() + " 만료 예정" : "장기 토큰은 서버에 암호화 저장"}</div>
+                </div>
+                <div style={{ padding: "16px", borderRadius: "14px", background: "rgba(15, 23, 42, 0.62)", border: "1px solid " + (queue.filter((item) => item.status === "FAILED").length ? "rgba(248, 113, 113, 0.34)" : "rgba(96, 165, 250, 0.34)") }}>
+                  <div style={{ color: "#94a3b8", fontSize: "12px", fontWeight: 700 }}>발송 대기열</div>
+                  <div style={{ marginTop: "8px", color: queue.filter((item) => item.status === "FAILED").length ? "#fca5a5" : "#93c5fd", fontWeight: 800, fontSize: "17px" }}>{queue.filter((item) => item.status === "PENDING" || item.status === "PROCESSING").length + "건 처리 대기"}</div>
+                  <div style={{ marginTop: "6px", color: "#cbd5e1", fontSize: "13px" }}>{queue.filter((item) => item.status === "FAILED").length ? queue.filter((item) => item.status === "FAILED").length + "건 실패 확인 필요" : "실패 항목 없음"}</div>
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.15fr) minmax(280px, 0.85fr)", gap: "16px", marginTop: "16px" }}>
+                <div style={{ padding: "18px", borderRadius: "14px", background: "rgba(15, 23, 42, 0.5)", border: "1px solid rgba(148, 163, 184, 0.18)" }}>
+                  <div style={{ color: "#e2e8f0", fontWeight: 800, marginBottom: "12px" }}>지금 필요한 작업</div>
+                  {!metaConnected ? (
+                    <button type="button" onClick={handleConnectMeta} disabled={metaLoading} style={{ border: 0, borderRadius: "10px", padding: "11px 14px", background: "#10b981", color: "#052e16", fontWeight: 800, cursor: metaLoading ? "wait" : "pointer" }}>
+                      {metaLoading ? "Meta 로그인 준비 중..." : "Instagram Professional 계정 연결"}
+                    </button>
+                  ) : (
+                    <div style={{ color: "#a7f3d0", fontSize: "14px", lineHeight: 1.65 }}>계정이 연결되었습니다. 테스트 계정으로 댓글 또는 DM을 보내고, 아래 활동 로그와 대기열 변화를 확인하세요.</div>
+                  )}
+                  {metaReadiness?.overallStatus !== "ready" && (
+                    <button type="button" onClick={() => setActiveTab("settings")} style={{ marginLeft: metaConnected ? 0 : "10px", marginTop: metaConnected ? "12px" : 0, border: "1px solid rgba(251, 191, 36, 0.5)", borderRadius: "10px", padding: "10px 12px", background: "rgba(120, 53, 15, 0.32)", color: "#fde68a", fontWeight: 700, cursor: "pointer" }}>연동 설정 확인</button>
+                  )}
+                </div>
+                <div style={{ padding: "18px", borderRadius: "14px", background: "rgba(15, 23, 42, 0.5)", border: "1px solid rgba(148, 163, 184, 0.18)" }}>
+                  <div style={{ color: "#e2e8f0", fontWeight: 800, marginBottom: "12px" }}>최근 Meta 활동</div>
+                  {events.filter((event) => /meta|webhook|발송/i.test(event.type + " " + event.text)).slice(0, 3).map((event) => (
+                    <div key={event.id} style={{ padding: "8px 0", borderBottom: "1px solid rgba(148, 163, 184, 0.12)" }}>
+                      <div style={{ color: "#e2e8f0", fontSize: "13px", fontWeight: 700 }}>{event.type}</div>
+                      <div style={{ color: "#94a3b8", fontSize: "12px", marginTop: "3px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{event.text}</div>
+                    </div>
+                  ))}
+                  {!events.some((event) => /meta|webhook|발송/i.test(event.type + " " + event.text)) && <div style={{ color: "#94a3b8", fontSize: "13px" }}>아직 표시할 Meta 활동이 없습니다.</div>}
+                </div>
+              </div>
+            </section>
             {/* 🌟 Premium Hero Banner Board (Inspired by DOT Template) */}
             <div
               className="animate-pulse-subtle"
@@ -1144,7 +1218,7 @@ function App() {
               {/* Blur Spot Decorations */}
               <div style={{ position: "absolute", right: 0, top: 0, height: "160px", width: "160px", borderRadius: "50%", background: "rgba(255, 255, 255, 0.08)", filter: "blur(40px)" }}></div>
               <div style={{ position: "absolute", left: "-40px", bottom: "-40px", height: "200px", width: "200px", borderRadius: "50%", background: "rgba(16, 185, 129, 0.2)", filter: "blur(50px)" }}></div>
-              
+
               <div style={{ position: "relative", zIndex: 2, maxWidth: "600px" }}>
                 <span
                   style={{
@@ -1166,7 +1240,7 @@ function App() {
                   이제 DOT 인스타 DM 자동화로 무료 자동화하세요!
                 </h2>
                 <p style={{ marginTop: "12px", fontSize: "13.5px", color: "rgba(255, 255, 255, 0.85)", lineHeight: "1.6" }}>
-                  게시물 개수, 발송 개수, 사용 기간 상관없이 평생 유료 전환 없이 100% 무료 무제한! 
+                  게시물 개수, 발송 개수, 사용 기간 상관없이 평생 유료 전환 없이 100% 무료 무제한!
                   타사 유료 솔루션의 고정 비용을 완전히 절감하고, 릴스 댓글 유입 전환율을 300% 이상 폭발적으로 떡상시킬 준비를 완수해 보세요.
                 </p>
               </div>
@@ -2185,7 +2259,7 @@ function App() {
         {/* Tab View: Admin Console (고도화 5단계) */}
         {activeTab === "admin" && user?.role === "ADMIN" && (
           <section className="admin-panel animate-fade-in" style={{ display: "flex", flexDirection: "column", gap: "25px" }}>
-            
+
             {/* Top Metrics */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "20px" }}>
               <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", padding: "20px", borderRadius: "12px" }}>

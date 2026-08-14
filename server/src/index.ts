@@ -2,13 +2,14 @@ import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import crypto from "crypto";
-import { PrismaClient } from "@prisma/client";
 import { evaluateTrigger, renderTemplate, enqueueMessage } from "./engine";
-import { startDeliveryWorker, sendNotification } from "./worker";
+import { startDeliveryWorker, sendNotification, processPendingQueue } from "./worker";
+import { prisma } from "./db";
 
 dotenv.config();
 
-const prisma = new PrismaClient();
+import { createOAuthState, encryptMetaToken, readOAuthState, verifyMetaWebhookSignature } from "./metaSecurity";
+import { buildInstagramAuthorizationUrl, connectInstagramBusinessAccount } from "./metaOAuth";
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -89,7 +90,7 @@ app.post("/api/auth/register", async (req: Request, res: Response) => {
 
     // Set first registered user as ADMIN for ease of demo, others as USER
     const userCount = await prisma.user.count();
-    const role = userCount === 0 || email === "데이비" ? "ADMIN" : "USER";
+    const role = userCount === 0 || email === "콘자" ? "ADMIN" : "USER";
 
     const passwordHash = hashPassword(password);
     const newUser = await prisma.user.create({
@@ -236,48 +237,15 @@ function getCurrentTime(): string {
   return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 }
 
-// HMAC SHA256 Verification Middleware
-const verifyMetaSignature = (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction
-): void => {
-  const signature = req.headers["x-hub-signature-256"] as string;
-
-  if (!signature) {
-    console.log("⚠️ Webhook Signature Header missing. Bypassing check for development simulation.");
-    return next();
-  }
-
-  const parts = signature.split("=");
-  if (parts.length !== 2 || parts[0] !== "sha256") {
-    res.status(401).send("Invalid signature format");
+// HMAC SHA256 verification using the unmodified request body.
+const verifyMetaSignature = (req: AuthRequest, res: Response, next: NextFunction): void => {
+  const signature = req.headers["x-hub-signature-256"] as string | undefined;
+  if (!verifyMetaWebhookSignature(req.rawBody, signature)) {
+    res.status(401).send("Invalid webhook signature");
     return;
   }
-
-  const expectedSignature = parts[1];
-  const appSecret = process.env.META_APP_SECRET || "";
-
-  if (!req.rawBody) {
-    res.status(400).send("Request body is empty");
-    return;
-  }
-
-  const calculatedSignature = crypto
-    .createHmac("sha256", appSecret)
-    .update(req.rawBody)
-    .digest("hex");
-
-  if (expectedSignature !== calculatedSignature) {
-    console.error("❌ HMAC Signature Mismatch! Rejecting request.");
-    res.status(401).send("Signature mismatch");
-    return;
-  }
-
-  console.log("✅ HMAC Signature Verified successfully.");
   next();
 };
-
 // ==========================================
 // DB Initial Seeding Helpers (if tables empty)
 // ==========================================
@@ -285,14 +253,14 @@ async function seedInitialData() {
   try {
     // Seed default admin user
     let adminUser = await prisma.user.findUnique({
-      where: { email: "데이비" }
+      where: { email: "콘자" }
     });
     if (!adminUser) {
       adminUser = await prisma.user.create({
         data: {
-          email: "데이비",
+          email: "콘자",
           passwordHash: hashPassword("7890uiop!"),
-          name: "데이비",
+          name: "콘자",
           role: "ADMIN",
         }
       });
@@ -307,6 +275,12 @@ async function seedInitialData() {
 seedInitialData();
 
 // ==========================================
+const { buildMetaReadinessReport } = require("./metaReadiness");
+
+app.get("/api/meta/readiness", (_req: Request, res: Response) => {
+  res.status(200).json(buildMetaReadinessReport());
+});
+
 // Meta Webhook Integration Endpoints
 // ==========================================
 
@@ -1230,69 +1204,106 @@ app.get("/api/auth/facebook", (req: Request, res: Response) => {
   res.send(html);
 });
 
+app.get("/api/meta/oauth/start", authenticateToken, (req: Request, res: Response) => {
+  try {
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.userId;
+    if (!userId) {
+      res.status(401).json({ error: "Authentication required" });
+      return;
+    }
+
+    const state = createOAuthState(userId);
+    res.json({ authorizationUrl: buildInstagramAuthorizationUrl(state) });
+  } catch (error) {
+    console.error("Meta OAuth start failed", error instanceof Error ? error.message : error);
+    res.status(503).json({ error: "Meta OAuth is not configured. Check the server environment variables." });
+  }
+});
+
 app.get("/api/auth/facebook/callback", async (req: Request, res: Response) => {
-  const { code, token } = req.query;
-  if (!code) {
-    res.status(400).send("Authorization code missing");
+  const sendPopupResult = (status: number, type: "META_AUTH_SUCCESS" | "META_AUTH_ERROR", payload: Record<string, unknown>) => {
+    const targetOrigin = process.env.FRONTEND_ORIGIN || req.protocol + "://" + req.get("host");
+    const message = JSON.stringify({ type, ...payload }).replace(/</g, "\u003c");
+    const body = type === "META_AUTH_SUCCESS"
+      ? "Instagram 계정 연결을 완료했습니다. 이 창을 닫아도 됩니다."
+      : "Instagram 계정 연결에 실패했습니다. 이 창을 닫고 다시 시도하세요.";
+    const html = '<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>Meta 연결</title></head><body><script>if(window.opener){window.opener.postMessage(' + message + ',' + JSON.stringify(targetOrigin) + ');}window.close();</script><p>' + body + '</p></body></html>';
+    res.status(status).type("html").send(html);
+  };
+
+  const code = typeof req.query.code === "string" ? req.query.code : "";
+  const state = typeof req.query.state === "string" ? req.query.state : "";
+  const denied = typeof req.query.error === "string" ? req.query.error : "";
+  if (denied) {
+    sendPopupResult(400, "META_AUTH_ERROR", { error: "The Instagram authorization request was cancelled or denied." });
+    return;
+  }
+  if (!code || !state) {
+    sendPopupResult(400, "META_AUTH_ERROR", { error: "Missing OAuth authorization code or state." });
     return;
   }
 
-  const decoded = token ? verifyToken(token as string) : null;
-  const userId = decoded ? decoded.userId : null;
-
   try {
-    const expires = new Date();
-    expires.setDate(expires.getDate() + 60);
+    const { userId } = readOAuthState(state);
+    const connection = await connectInstagramBusinessAccount(code);
+    const existing = await prisma.account.findUnique({ where: { instagramId: connection.instagramId } });
+    if (existing?.userId && existing.userId !== userId) {
+      throw new Error("This Instagram account is already connected to another workspace user");
+    }
 
     const account = await prisma.account.upsert({
-      where: { instagramId: "ig_dml_studio_12345" },
+      where: { instagramId: connection.instagramId },
       update: {
-        username: "dml.studio",
-        accessToken: `access_token_${code}_${Date.now()}`,
-        tokenExpires: expires,
+        username: connection.username,
+        accessToken: encryptMetaToken(connection.accessToken),
+        tokenExpires: connection.tokenExpires,
+        notificationUrl: process.env.META_WEBHOOK_URL || null,
         userId,
       },
       create: {
-        instagramId: "ig_dml_studio_12345",
-        username: "dml.studio",
-        accessToken: `access_token_${code}_${Date.now()}`,
-        tokenExpires: expires,
+        instagramId: connection.instagramId,
+        username: connection.username,
+        accessToken: encryptMetaToken(connection.accessToken),
+        tokenExpires: connection.tokenExpires,
+        notificationUrl: process.env.META_WEBHOOK_URL || null,
         userId,
       },
     });
 
     await prisma.eventLog.create({
       data: {
-        time: `${String(new Date().getHours()).padStart(2, "0")}:${String(new Date().getMinutes()).padStart(2, "0")}`,
-        type: "Meta 연결",
-        text: "Instagram Professional 계정 'dml.studio' 연동 완료 (토큰 정상)",
-        status: "success",
+        time: getCurrentTime(),
+        type: "Meta OAuth 연결",
+        text: "Instagram Professional 계정 @" + connection.username + " 연결 완료" + (connection.subscribed ? " (Webhook 구독 완료)" : " (Webhook 구독 확인 필요)"),
+        status: connection.subscribed ? "success" : "warning",
+        eventId: "meta-oauth-" + account.id + "-" + Date.now(),
         userId,
-        eventId: `meta-connect-${Date.now()}`,
       },
     });
 
-    const htmlResponse = `
-      <!DOCTYPE html>
-      <html>
-      <body>
-        <script>
-          if (window.opener) {
-            window.opener.postMessage({ type: 'META_AUTH_SUCCESS', account: ${JSON.stringify(account)} }, '*');
-          }
-          window.close();
-        </script>
-        <p>인증 완료! 이 창은 곧 닫힙니다...</p>
-      </body>
-      </html>
-    `;
-    res.send(htmlResponse);
-  } catch {
-    res.status(500).send("Failed to save credentials during callback");
+    sendPopupResult(200, "META_AUTH_SUCCESS", {
+      account: {
+        id: account.id,
+        instagramId: account.instagramId,
+        username: account.username,
+        tokenExpires: account.tokenExpires,
+        dailyLimit: account.dailyLimit,
+        webhookSubscribed: connection.subscribed,
+        permissions: connection.permissions,
+      },
+    });
+  } catch (error) {
+    console.error("Meta OAuth callback failed", error instanceof Error ? error.message : error);
+    sendPopupResult(500, "META_AUTH_ERROR", { error: "Instagram account connection failed. Verify the Meta app settings and try again." });
   }
 });
 
 app.post("/api/auth/facebook/manual", async (req: Request, res: Response) => {
+  if (process.env.META_ALLOW_MANUAL_TOKEN_IMPORT !== "true") {
+    res.status(403).json({ error: "Manual token import is disabled. Use the Meta OAuth connection flow." });
+    return;
+  }
   const { token, username, instagramId, accessToken } = req.body;
   if (!username || !instagramId || !accessToken) {
     res.status(400).send("Missing required fields");
@@ -1312,14 +1323,14 @@ app.post("/api/auth/facebook/manual", async (req: Request, res: Response) => {
       where: { instagramId: instagramId.trim() },
       update: {
         username: cleanUsername,
-        accessToken: accessToken.trim(),
+        accessToken: encryptMetaToken(accessToken.trim()),
         tokenExpires: expires,
         userId,
       },
       create: {
         instagramId: instagramId.trim(),
         username: cleanUsername,
-        accessToken: accessToken.trim(),
+        accessToken: encryptMetaToken(accessToken.trim()),
         tokenExpires: expires,
         userId,
       },
@@ -1782,8 +1793,43 @@ app.get("/deletion", (req: Request, res: Response) => {
   res.send(html);
 });
 
-// Server boot-up
-app.listen(PORT, () => {
-  console.log(`🚀 API Server running on http://localhost:${PORT}`);
-  startDeliveryWorker();
+
+
+/**
+ * Test-only queue drain for Vercel Hobby. A background worker cannot remain
+ * active in a serverless function, so an authorized operator drains a batch.
+ */
+app.post("/api/internal/process-queue", async (req: Request, res: Response) => {
+  if (process.env.SERVERLESS_TEST_MODE !== "true") {
+    return res.status(404).json({ error: "Not found" });
+  }
+
+  const expected = process.env.TEST_TRIGGER_SECRET || "";
+  const supplied = String(req.header("x-test-trigger") || "");
+  const valid = Boolean(expected) && supplied.length === expected.length &&
+    crypto.timingSafeEqual(Buffer.from(supplied), Buffer.from(expected));
+
+  if (!valid) return res.status(403).json({ error: "Forbidden" });
+
+  try {
+    await processPendingQueue(25);
+    return res.status(202).json({ accepted: true, limit: 25 });
+  } catch (error) {
+    console.error("[Test queue] processing failed", error);
+    return res.status(500).json({ error: "Queue processing failed" });
+  }
 });
+
+
+// Vercel imports this Express app as a Function. Local or persistent hosts keep
+// their existing listener and continuous worker behavior.
+if (process.env.VERCEL !== "1") {
+  app.listen(PORT, () => {
+    console.log(`🚀 API Server running on http://localhost:${PORT}`);
+    if (process.env.SERVERLESS_TEST_MODE !== "true") {
+      startDeliveryWorker();
+    }
+  });
+}
+
+export default app;

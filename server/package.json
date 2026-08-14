@@ -8,7 +8,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
+    "prisma:migrate": "prisma migrate dev",
+    "vercel-build": "prisma generate && tsc --noEmit --pretty false --incremental false --skipLibCheck && tsc --noEmit --skipLibCheck --target ES2022 --module CommonJS --moduleResolution node --esModuleInterop --strict api/index.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.0.0",
