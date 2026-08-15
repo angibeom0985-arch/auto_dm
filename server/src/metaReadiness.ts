@@ -18,5 +18,5 @@ export function buildMetaReadinessReport() {
     action: ok ? "배포 환경과 Meta Dashboard 상태를 정기 점검하세요." : "서버 환경 변수와 Meta App Dashboard 설정을 점검하세요.",
   }));
   const overallStatus: MetaReadinessStatus = checks.some((check) => check.status === "not_configured") ? "not_configured" : checks.some((check) => check.status === "attention") ? "attention" : "ready";
-  return { generatedAt: new Date().toISOString(), overallStatus, checks, requiredPermissions: (process.env.META_REQUIRED_PERMISSIONS ?? "instagram_basic,instagram_manage_messages,instagram_manage_comments,pages_manage_metadata").split(","), documentationUrl: "https://developers.facebook.com/documentation/instagram-platform/overview" };
+  return { generatedAt: new Date().toISOString(), overallStatus, checks, requiredPermissions: (process.env.META_REQUIRED_PERMISSIONS ?? "instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments").split(","), documentationUrl: "https://developers.facebook.com/documentation/instagram-platform/overview" };
 }
